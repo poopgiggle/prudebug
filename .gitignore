@@ -1,0 +1,8 @@
+#emacs tempfiles
+*~
+
+#object files
+*.o
+
+#compiled binary
+prudebug
