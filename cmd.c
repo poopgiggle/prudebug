@@ -164,10 +164,44 @@ void cmd_printregs()
 	if (ctrl_reg&PRU_REG_RUNSTATE) {
 		printf("    Rxx registers not available since PRU is RUNNING.\n");
 	} else {
-		for (i=0; i<8; i++) printf("    R%02u: 0x%08x    R%02u: 0x%08x    R%02u: 0x%08x    R%02u: 0x%08x\n", i, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i], i+8, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 8], i+16, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 16], i+24, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 24]);
+		for (i=0; i<8; i++)
+      printf("    R%02u: 0x%08x    R%02u: 0x%08x    R%02u: 0x%08x    R%02u: 0x%08x\n",
+             i,    pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i],
+             i+8,  pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 8],
+             i+16, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 16],
+             i+24, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 24]);
 	}
 
 	printf("\n");
+}
+
+// print current single specific PRU registers
+void cmd_printreg(unsigned int i)
+{
+	unsigned int		ctrl_reg;
+
+	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+
+	if (ctrl_reg&PRU_REG_RUNSTATE) {
+		printf("Rxx registers not available since PRU is RUNNING.\n");
+	} else {
+      printf("R%02u: 0x%08x\n\n",
+             i, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i]);
+	}
+}
+
+// print current single specific PRU registers
+void cmd_setreg(int i, unsigned int value)
+{
+	unsigned int		ctrl_reg;
+
+	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+
+	if (ctrl_reg&PRU_REG_RUNSTATE) {
+		printf("Rxx registers not available since PRU is RUNNING.\n");
+	} else {
+		pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i] = value;
+	}
 }
 
 // start PRU running

@@ -15,7 +15,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <termios.h>
-#include <sys/ioctl.h>
+#include <regex.h>
 
 #include "prudbg.h"
 #include "uio.h"
@@ -142,6 +142,8 @@ int main(int argc, char *argv[])
 	unsigned long		opt_pruss_addr;
 	int			pru_access_mode, pi, pitemp;
 	char			uio_dev_file[50];
+	regex_t reg_regex;
+	int doregs = regcomp(&reg_regex, "r[0-9]\\+\\>", REG_ICASE);
 
 	// say hello
 	printf ("PRU Debugger v0.25\n");
@@ -457,7 +459,20 @@ int main(int argc, char *argv[])
 			} else {
 				cmd_printregs();
 			}
-		}		
+		}
+
+		else if (!regexec(&reg_regex, cmd, 0, NULL, 0)) {					// R[0..31] - Read/Write single PRU registers
+			last_cmd = LAST_CMD_NONE;
+			i = strtol(cmd+1, NULL, 0);
+			if (numargs == 0) {
+				cmd_printreg(i);
+			} else if (numargs == 1) {
+				value = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				cmd_setreg(i, value);
+			} else {
+				printf("ERROR: too many arguments\n");
+			}
+		}
 
 		else if (!strcmp(cmd, "RESET")) {					// RESET - Reset PRU
 			last_cmd = LAST_CMD_NONE;
@@ -564,6 +579,7 @@ int main(int argc, char *argv[])
 	} while (strcmp(cmd, "Q"));
 
 	printf("\nGoodbye.\n\n");
+	regfree(&reg_regex);
 
 	return 0;
 }
