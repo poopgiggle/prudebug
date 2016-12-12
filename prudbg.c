@@ -281,19 +281,13 @@ int main(int argc, char *argv[])
 	}
 	printf("\n");
 
-	// setup the terminal for more flexible IO
-	ioctl(0,TCGETS,&oldT);
-	newT=oldT;
-	newT.c_lflag &= ~ECHO;
-	newT.c_lflag &= ~ICANON;
-	ioctl(0,TCSETS,&newT);
-
 
 	// Command prompt handler
 	do {
 		// get command from user
 		sprintf(prompt_str, "PRU%u> ", pru_num);
-		cmd_input(prompt_str, cmd, cmdargs, argptrs, &numargs);
+		if (cmd_input(prompt_str, cmd, cmdargs, argptrs, &numargs))
+			break;
 
 		// do something with command info
 		if (!strcmp(cmd, "?") || !strcmp(cmd, "HELP")) {		// HELP - help command
@@ -570,9 +564,6 @@ int main(int argc, char *argv[])
 	} while (strcmp(cmd, "Q"));
 
 	printf("\nGoodbye.\n\n");
-
-	// restore terminal IO settings
-	ioctl(0,TCSETS,&oldT);
 
 	return 0;
 }
