@@ -246,12 +246,21 @@ void cmd_runss()
 
 		// check if we've hit a watch point
 //		addr = pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG] & 0xFFFF;
-		for (i=0; i<MAX_WATCH; i++) {
-			if ((wa[pru_num][i].state == WA_PRINT_ON_ANY) && (wa[pru_num][i].old_value != pru[pru_data_base[pru_num] + wa[pru_num][i].address])) {
-				printf("[0x%04x]  0x%04x  t=%lu\n", wa[pru_num][i].address, pru[pru_data_base[pru_num] + wa[pru_num][i].address], t_cyc);
-				wa[pru_num][i].old_value = pru[pru_data_base[pru_num] + wa[pru_num][i].address];
-			} else if ((wa[pru_num][i].state == WA_HALT_ON_VALUE) && (wa[pru_num][i].value == pru[pru_data_base[pru_num] + wa[pru_num][i].address])) {
-				printf("[0x%04x]  0x%04x  t=%lu\n", wa[pru_num][i].address, pru[pru_data_base[pru_num] + wa[pru_num][i].address], t_cyc);	
+		for (i=0; i<MAX_WATCH; ++i) {
+			if ((wa[pru_num][i].state == WA_PRINT_ON_ANY) &&
+			    (wa[pru_num][i].old_value !=
+			     pru[pru_data_base[pru_num] + wa[pru_num][i].address])) {
+				printf("@0x%04x  [0x%04x]  0x%04x  t=%lu\n",
+				       addr, wa[pru_num][i].address,
+				       pru[pru_data_base[pru_num] + wa[pru_num][i].address], t_cyc);
+				wa[pru_num][i].old_value =
+					pru[pru_data_base[pru_num] + wa[pru_num][i].address];
+			} else if ((wa[pru_num][i].state == WA_HALT_ON_VALUE) &&
+				   (wa[pru_num][i].value ==
+				    pru[pru_data_base[pru_num] + wa[pru_num][i].address])) {
+				printf("@0x%04x  [0x%04x]  0x%04x  t=%lu\n",
+				       addr, wa[pru_num][i].address,
+				       pru[pru_data_base[pru_num] + wa[pru_num][i].address], t_cyc);
 				done = 1;
 			}
 		}
