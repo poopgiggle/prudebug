@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <termios.h>
 #include <regex.h>
+#include <string.h>
 
 #include "prudbg.h"
 #include "uio.h"
@@ -128,6 +129,22 @@ int strcmpci(char *str1, char *str2, int m) {
 	return r;
 }
 
+static size_t parse_addr(const char * str, const regex_t * reg_regex) {
+	size_t addr;
+
+	if (!regexec(reg_regex, str, 0, NULL, 0)) {
+		while (strlen(str) != 0 && isspace(str[0]))
+			++str;
+
+		/* Need to make register address offset by data base */
+		addr = strtol(str+1, NULL, 10)
+		     + (PRU_INTGPR_REG + pru_ctrl_base[pru_num]
+			- pru_data_base[pru_num]);
+	} else {
+		addr = strtol(str, NULL, 0);
+	}
+}
+
 // main entry point for program
 int main(int argc, char *argv[])
 {
@@ -143,7 +160,7 @@ int main(int argc, char *argv[])
 	int			pru_access_mode, pi, pitemp;
 	char			uio_dev_file[50];
 	regex_t reg_regex;
-	int doregs = regcomp(&reg_regex, "r[0-9]\\+\\>", REG_ICASE);
+	int doregs = regcomp(&reg_regex, "[:space:]*r[0-9]\\+\\>", REG_ICASE);
 
 	// say hello
 	printf ("PRU Debugger v0.25\n");
@@ -463,7 +480,12 @@ int main(int argc, char *argv[])
 
 		else if (!regexec(&reg_regex, cmd, 0, NULL, 0)) {					// R[0..31] - Read/Write single PRU registers
 			last_cmd = LAST_CMD_NONE;
-			i = strtol(cmd+1, NULL, 0);
+			i = 0;
+			/* skip leading white space */
+			while (strlen(cmd+i) != 0 && isspace(cmd[i]))
+				++i;
+
+			i = strtol(cmd+i + 1, NULL, 0);
 			if (numargs == 0) {
 				cmd_printreg(i);
 			} else if (numargs == 1) {
@@ -508,7 +530,7 @@ int main(int argc, char *argv[])
 				}
 			} else if (numargs == 2) {
 				wanum = strtol(&cmdargs[argptrs[0]], NULL, 0);
-				addr = strtol(&cmdargs[argptrs[1]], NULL, 0);
+				addr = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
 				if (wanum < MAX_WATCH) {
 					cmd_set_watch_any (wanum, addr);
 				} else {
@@ -516,7 +538,7 @@ int main(int argc, char *argv[])
 				}
 			} else if (numargs == 3) {
 				wanum = strtol(&cmdargs[argptrs[0]], NULL, 0);
-				addr = strtol(&cmdargs[argptrs[1]], NULL, 0);
+				addr = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
 				value = strtol(&cmdargs[argptrs[2]], NULL, 0);
 				if (wanum < MAX_WATCH) {
 					cmd_set_watch (wanum, addr, value);
