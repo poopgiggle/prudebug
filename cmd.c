@@ -185,8 +185,8 @@ void cmd_printreg(unsigned int i)
 	if (ctrl_reg&PRU_REG_RUNSTATE) {
 		printf("Rxx registers not available since PRU is RUNNING.\n");
 	} else {
-      printf("R%02u: 0x%08x\n\n",
-             i, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i]);
+		printf("R%02u: 0x%08x\n\n",
+		       i, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i]);
 	}
 }
 
