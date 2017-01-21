@@ -1,4 +1,4 @@
-/* 
+/*
  *
  *  PRU Debug Program
  *  (c) Copyright 2011, 2013 by Arctica Technologies
@@ -16,6 +16,7 @@
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
+#include <string.h>
 
 #include "prudbg.h"
 
@@ -49,16 +50,38 @@ int cmd_clear_breakpoint (unsigned int bpnum)
 }
 
 // dump data memory
-int cmd_d (int offset, int addr, int len)
+int cmd_dx_rows (const char * prefix, unsigned char * data, int offset, int addr, int len)
 {
 	int			i, j;
 
 	for (i=0; i<len; ) {
-		printf ("[0x%04x] ", addr+i);
-		for (j=0;(i<len)&&(j<4); i++,j++) printf ("0x%08x ", pru[offset+addr+i]);
+		printf (prefix);
+
+		printf ("[0x%05x]", addr+i);
+
+		for (j=0; (i<len) && (j<8); ++i, ++j)
+			printf (" %02x", data[offset+addr+i]);
+
+		printf ("-");
+
+		for (j=0; (i<len) && (j<8); ++i, ++j)
+			printf ("%02x ", data[offset+addr+i]);
+
 		printf ("\n");
 	}
 	printf("\n");
+}
+
+int cmd_d_rows (int offset, int addr, int len)
+{
+	cmd_dx_rows("", (unsigned char*)pru, offset, addr, len);
+}
+
+int cmd_d (int offset, int addr, int len)
+{
+	printf ("Absolute addr = 0x%05x, offset = 0x%05x, Len = %u\n",
+		addr + offset, addr, len);
+	cmd_d_rows(offset, addr, len);
 }
 
 // disassemble instruction memory
@@ -239,7 +262,7 @@ void cmd_runss()
 		ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
 		ctrl_reg |= PRU_REG_PROC_EN | PRU_REG_SINGLE_STEP;
 		pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
-		
+
 		// check if we've hit a breakpoint
 		addr = pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG] & 0xFFFF;
 		for (i=0; i<MAX_BREAKPOINTS; i++) if ((bp[pru_num][i].state == BP_ACTIVE) && (bp[pru_num][i].address == addr)) done = 1;
@@ -247,20 +270,36 @@ void cmd_runss()
 		// check if we've hit a watch point
 //		addr = pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG] & 0xFFFF;
 		for (i=0; i<MAX_WATCH; ++i) {
+			unsigned char *pru_u8 = (unsigned char*)pru;
+
 			if ((wa[pru_num][i].state == WA_PRINT_ON_ANY) &&
-			    (wa[pru_num][i].old_value !=
-			     pru[pru_data_base[pru_num] + wa[pru_num][i].address])) {
-				printf("@0x%04x  [0x%04x]  0x%04x  t=%lu\n",
-				       addr, wa[pru_num][i].address,
-				       pru[pru_data_base[pru_num] + wa[pru_num][i].address], t_cyc);
-				wa[pru_num][i].old_value =
-					pru[pru_data_base[pru_num] + wa[pru_num][i].address];
+			    (memcmp(wa[pru_num][i].old_value,
+				    pru_u8 + pru_data_base[pru_num]*4
+					   + wa[pru_num][i].address,
+				    wa[pru_num][i].len) != 0)) {
+
+				printf("@0x%04x  [0x%05x] t=%lu: ",
+				       addr, wa[pru_num][i].address, t_cyc);
+				cmd_d_rows(pru_data_base[pru_num]*4,
+					   wa[pru_num][i].address,
+					   wa[pru_num][i].len);
+
+				memcpy(wa[pru_num][i].old_value,
+				       pru_u8 + pru_data_base[pru_num]*4
+					      + wa[pru_num][i].address,
+				       wa[pru_num][i].len);
 			} else if ((wa[pru_num][i].state == WA_HALT_ON_VALUE) &&
-				   (wa[pru_num][i].value ==
-				    pru[pru_data_base[pru_num] + wa[pru_num][i].address])) {
-				printf("@0x%04x  [0x%04x]  0x%04x  t=%lu\n",
-				       addr, wa[pru_num][i].address,
-				       pru[pru_data_base[pru_num] + wa[pru_num][i].address], t_cyc);
+				   (memcmp(wa[pru_num][i].value,
+					   pru_u8 + pru_data_base[pru_num]*4
+						  + wa[pru_num][i].address,
+					   wa[pru_num][i].len) == 0)) {
+
+				printf("@0x%04x  [0x%05x] t=%lu: ",
+				       addr, wa[pru_num][i].address, t_cyc);
+				cmd_d_rows(pru_data_base[pru_num]*4,
+					   wa[pru_num][i].address,
+					   wa[pru_num][i].len);
+
 				done = 1;
 			}
 		}
@@ -325,9 +364,17 @@ void cmd_print_watch()
 	printf("##  Address  Value\n");
 	for (i=0; i<MAX_WATCH; i++) {
 		if (wa[pru_num][i].state == WA_PRINT_ON_ANY) {
-			printf("%02u  0x%04x     Print on any\n", i, wa[pru_num][i].address);
+			printf("%02u  0x%05x     Print on any change from:\n",
+			       i, wa[pru_num][i].address);
+			cmd_dx_rows("\t\t", wa[pru_num][i].old_value, 0, 0x0,
+				    wa[pru_num][i].len);
+
 		} else if (wa[pru_num][i].state == WA_HALT_ON_VALUE) {
-			printf("%02u  0x%04x     Halt = 0x%04x\n", i, wa[pru_num][i].address, wa[pru_num][i].value);
+			printf("%02u  0x%05x     Halt = \n",
+			       i, wa[pru_num][i].address);
+			cmd_dx_rows("\t\t", wa[pru_num][i].value, 0, 0x0,
+				    wa[pru_num][i].len);
+
 		} else {
 			printf("%02u  UNUSED\n", i);
 		}
@@ -341,20 +388,31 @@ void cmd_clear_watch (unsigned int wanum)
 	wa[pru_num][wanum].state = WA_UNUSED;
 }
 
+inline unsigned int min(unsigned int a, unsigned int b) {
+	return a < b ? a : b;
+}
+
 // set a watch for any change in value and no halt
-void cmd_set_watch_any (unsigned int wanum, unsigned int addr)
+void cmd_set_watch_any (unsigned int wanum, unsigned int addr, unsigned int len)
 {
-	wa[pru_num][wanum].state = WA_PRINT_ON_ANY;
-	wa[pru_num][wanum].address = addr;
-	wa[pru_num][wanum].old_value = pru[pru_data_base[pru_num] + addr];
+	unsigned char * pru_u8 = (unsigned char*)pru;
+	wa[pru_num][wanum].state	= WA_PRINT_ON_ANY;
+	wa[pru_num][wanum].address	= addr;
+	wa[pru_num][wanum].len		= len;
+	memcpy(wa[pru_num][wanum].old_value,
+	       pru_u8 + pru_data_base[pru_num]*4 + addr,
+	       min(len, MAX_WATCH_LEN));
 }
 
 // set a watch for a specific value and halt
-void cmd_set_watch (unsigned int wanum, unsigned int addr, unsigned int value)
+void cmd_set_watch (unsigned int wanum, unsigned int addr,
+		    unsigned int len, unsigned char * value)
 {
-	wa[pru_num][wanum].state = WA_HALT_ON_VALUE;
-	wa[pru_num][wanum].address = addr;
-	wa[pru_num][wanum].value = value;
+	wa[pru_num][wanum].state	= WA_HALT_ON_VALUE;
+	wa[pru_num][wanum].address	= addr;
+	wa[pru_num][wanum].len		= len;
+	memcpy(wa[pru_num][wanum].value, value,
+	       min(len, MAX_WATCH_LEN));
 }
 
 

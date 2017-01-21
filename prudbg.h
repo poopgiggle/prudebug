@@ -27,8 +27,9 @@
 #define MAX_PRU_MEM		0xFFFF
 #define NUM_OF_PRU		2
 #define MAX_NUM_OF_PRUS		16					// maximum number of PRUs to expect in any processor
-#define MAX_BREAKPOINTS		5
-#define MAX_WATCH		5
+#define MAX_BREAKPOINTS		10
+#define MAX_WATCH		10
+#define MAX_WATCH_LEN		32
 #define MAX_PROC_NAME		20
 
 // register offsets
@@ -79,8 +80,9 @@ struct breakpoints {
 struct watchvariable {
 	unsigned char		state;
 	unsigned int		address;
-	unsigned int		value;
-	unsigned int		old_value;
+	unsigned int		len;
+	unsigned char		value[MAX_WATCH_LEN];
+	unsigned char		old_value[MAX_WATCH_LEN];
 };
 
 
@@ -93,9 +95,13 @@ extern struct watchvariable	wa[MAX_NUM_OF_PRUS][MAX_WATCH];
 
 
 // function prototypes
-int cmd_input(char *prompt, char *cmd, char *cmdargs, unsigned int *argptrs, unsigned int *numargs);
+int cmd_input(char *prompt, char *cmd, char *cmdargs, unsigned int *argptrs,
+	      unsigned int *numargs);
 void printhelp();
 int cmd_d (int offset, int addr, int len);
+int cmd_d_rows (int offset, int addr, int len);
+int cmd_dx_rows (const char * prefix, unsigned char * data, int offset,
+		 int addr, int len);
 int cmd_loadprog(unsigned int addr, char *fn);
 void cmd_run();
 void cmd_soft_reset();

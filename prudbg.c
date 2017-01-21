@@ -140,9 +140,12 @@ static size_t parse_addr(const char * str, const regex_t * reg_regex) {
 		addr = strtol(str+1, NULL, 10)
 		     + (PRU_INTGPR_REG + pru_ctrl_base[pru_num]
 			- pru_data_base[pru_num]);
+		/* convert this to a byte address */
+		addr *= 4;
 	} else {
 		addr = strtol(str, NULL, 0);
 	}
+	return addr;
 }
 
 // main entry point for program
@@ -154,7 +157,7 @@ int main(int argc, char *argv[])
 	unsigned int		argptrs[MAX_ARGS], numargs;
 	struct termios		oldT, newT;
 	unsigned int		i;
-	unsigned int		addr, len, bpnum, offset, wanum, value;
+	unsigned int		addr, len, bpnum, offset, wanum;
 	int			opt;
 	unsigned long		opt_pruss_addr;
 	int			pru_access_mode, pi, pitemp;
@@ -352,21 +355,23 @@ int main(int argc, char *argv[])
 					len = strtol(&cmdargs[argptrs[1]], NULL, 0);
 				} else if (numargs == 0) {
 					addr = 0;
-					len = 16;
+					len = 16*4;
 				} else {
 					addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
-					len = 16;
+					len = 16*4;
 				}
-				if ((addr < 0) || (addr > MAX_PRU_MEM - 1) || (len < 0) || (addr+len > MAX_PRU_MEM)) {
+				if ((addr < 0) || (addr     > ((1+MAX_PRU_MEM)*4 - 1)) ||
+            (len < 0)  || (addr+len > ((1+MAX_PRU_MEM)*4))) {
 					printf("ERROR: arguments out of range.\n");
 				} else if (numargs > 2) {
 					printf("ERROR: Incorrect format.  Please use help command to get command details.\n");
 				} else {
+          /* The memory is examined byte per byte, so multiply addresses by 4 */
 					if (!strcmp(cmd, "DD")) {
-						offset = pru_data_base[pru_num];
+						offset = pru_data_base[pru_num] * 4;
 						last_cmd = LAST_CMD_DD;
 					} else if (!strcmp(cmd, "DI")) {
-						offset = pru_inst_base[pru_num];
+						offset = pru_inst_base[pru_num] * 4;
 						last_cmd = LAST_CMD_DI;
 					} else {
 						offset = 0;
@@ -375,7 +380,6 @@ int main(int argc, char *argv[])
 					last_offset = offset;
 					last_addr = addr + len;
 					last_len = len;
-					printf ("Absolute addr = 0x%04x, offset = 0x%04x, Len = %u\n", addr + offset, addr, len);
 					cmd_d(offset, addr, len);
 				}
 			}
@@ -395,7 +399,8 @@ int main(int argc, char *argv[])
 					addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
 					len = 16;
 				}
-				if ((addr < 0) || (addr > MAX_PRU_MEM - 1) || (len < 0) || (addr+len > MAX_PRU_MEM)) {
+				if ((addr < 0) || (addr     > MAX_PRU_MEM - 1) ||
+            (len < 0)  || (addr+len > MAX_PRU_MEM)) {
 					printf("ERROR: arguments out of range.\n");
 				} else if (numargs > 2) {
 					printf("ERROR: Incorrect format.  Please use help command to get command details.\n");
@@ -489,7 +494,7 @@ int main(int argc, char *argv[])
 			if (numargs == 0) {
 				cmd_printreg(i);
 			} else if (numargs == 1) {
-				value = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				unsigned int value = strtol(&cmdargs[argptrs[0]], NULL, 0);
 				cmd_setreg(i, value);
 			} else {
 				printf("ERROR: too many arguments\n");
@@ -528,46 +533,69 @@ int main(int argc, char *argv[])
 				} else {
 					printf("ERROR: breakpoint number must be equal to or between 0 and %u\n", MAX_WATCH-1);
 				}
-			} else if (numargs == 2) {
+			} else if (numargs >= 2 && numargs <= 3) {
+				unsigned int len = 4;
+
 				wanum = strtol(&cmdargs[argptrs[0]], NULL, 0);
 				addr = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
+				if (numargs == 3)
+					len = strtol(&cmdargs[argptrs[2]], NULL, 0);
 				if (wanum < MAX_WATCH) {
-					cmd_set_watch_any (wanum, addr);
+					cmd_set_watch_any (wanum, addr, len);
 				} else {
 					printf("ERROR: breakpoint number must be equal to or between 0 and %u\n", MAX_WATCH-1);
 				}
-			} else if (numargs == 3) {
+			} else if (numargs-4 > MAX_WATCH_LEN) {
+				printf("ERROR: too many watch values\n");
+			} else if (numargs >= 5) {
+				unsigned char vlist[MAX_WATCH_LEN];
+
 				wanum = strtol(&cmdargs[argptrs[0]], NULL, 0);
-				addr = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
-				value = strtol(&cmdargs[argptrs[2]], NULL, 0);
+				addr  = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
+
+				/* gather all the values */
+				for(i = 3; i < numargs; ++i) {
+					vlist[i-3] = 0xff
+						   & strtol(&cmdargs[argptrs[i]], NULL, 0);
+				}
+
 				if (wanum < MAX_WATCH) {
-					cmd_set_watch (wanum, addr, value);
+					cmd_set_watch (wanum, addr, numargs - 4, vlist);
 				} else {
 					printf("ERROR: breakpoint number must be equal to or between 0 and %u\n", MAX_WATCH-1);
 				}
 			} else {
-				printf("ERROR: invalid breakpoint command\n");
+				printf("ERROR: invalid watch command\n");
 			}
 		}
 
-		else if ((!strcmp(cmd, "WR")) || (!strcmp(cmd, "WRD")) || (!strcmp(cmd, "WRI"))) {  // WR - Write Raw
+		else if ((!strcmp(cmd, "WR"))  ||
+			 (!strcmp(cmd, "WRD")) ||
+			 (!strcmp(cmd, "WRI"))) {  // WR - Write Raw
 			last_cmd = LAST_CMD_NONE;
 			addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
 			if (numargs < 2) {
 				printf("ERROR: too few arguments\n");
 			} else {
-				if ((addr < 0) || (addr > MAX_PRU_MEM - 1)) {
+				if ((addr < 0) || (addr > ((1+MAX_PRU_MEM)*4 - 1)) ||
+				    (addr+numargs-1 > ((1+MAX_PRU_MEM)*4))) {
 					printf("ERROR: arguments out of range.\n");
 				} else {
+					unsigned char *pru_u8 = (unsigned char*)pru;
+
+					/* The memory is examined byte per byte,
+					 * so multiply addresses by 4 */
 					if (!strcmp(cmd, "WRD")) {
-						offset = pru_data_base[pru_num];
+						offset = pru_data_base[pru_num]*4;
 					} else if (!strcmp(cmd, "WRI")) {
-						offset = pru_inst_base[pru_num];
+						offset = pru_inst_base[pru_num]*4;
 					} else {
 						offset = 0;
 					}
 					printf("Write to absolute address 0x%04x\n", offset+addr);
-					for (i=1; i<numargs; i++) pru[offset+addr+i-1] = (unsigned int) (strtoll(&cmdargs[argptrs[i]], NULL, 0) & 0xFFFFFFFF);
+					for (i=1; i<numargs; ++i)
+						pru_u8[offset+addr+i-1] =
+							(unsigned char) (strtol(&cmdargs[argptrs[i]], NULL, 0) & 0xFF);
 				}
 			}
 		}
@@ -580,7 +608,6 @@ int main(int argc, char *argv[])
 				case LAST_CMD_D:
 				case LAST_CMD_DD:
 				case LAST_CMD_DI:
-					printf ("Absolute addr = 0x%04x, offset = 0x%04x, Len = %u\n", last_addr + last_offset, last_addr, last_len);
 					cmd_d(last_offset, last_addr, last_len);
 					last_addr += last_len;
 					break;
