@@ -9,5 +9,5 @@ prudebug : ${objs}
 	${CC} ${objs} ${CFLAGS} -lreadline -o prudebug
 
 clean :
-	rm *.o
-	rm prudebug
+	$(RM) *.o
+	$(RM) prudebug
