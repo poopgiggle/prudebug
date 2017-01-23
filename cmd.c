@@ -69,7 +69,6 @@ int cmd_dx_rows (const char * prefix, unsigned char * data, int offset, int addr
 
 		printf ("\n");
 	}
-	printf("\n");
 }
 
 int cmd_d_rows (int offset, int addr, int len)
@@ -82,6 +81,7 @@ int cmd_d (int offset, int addr, int len)
 	printf ("Absolute addr = 0x%05x, offset = 0x%05x, Len = %u\n",
 		addr + offset, addr, len);
 	cmd_d_rows(offset, addr, len);
+	printf("\n");
 }
 
 // disassemble instruction memory
