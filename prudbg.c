@@ -129,6 +129,14 @@ int strcmpci(char *str1, char *str2, int m) {
 	return r;
 }
 
+/* This function adds 0b... format recognition to strtol */
+static long parse_long(const char * str) {
+	if (strlen(str) > 2 && strncmp(str, "0b", 2) == 0) {
+		return strtol(str+2, NULL, 2);
+	}
+	return strtol(str, NULL, 0);
+}
+
 static size_t parse_addr(const char * str, const regex_t * reg_regex) {
 	size_t addr;
 
@@ -143,7 +151,7 @@ static size_t parse_addr(const char * str, const regex_t * reg_regex) {
 		/* convert this to a byte address */
 		addr *= 4;
 	} else {
-		addr = strtol(str, NULL, 0);
+		addr = parse_long(str);
 	}
 	return addr;
 }
@@ -178,7 +186,7 @@ int main(int argc, char *argv[])
 	while ((opt = getopt(argc, argv, "?a:p:um")) != -1) {
 		switch (opt) {
 			case 'a':
-				opt_pruss_addr = strtol(optarg, NULL, 0);
+				opt_pruss_addr = parse_long(optarg);
 				break;
 				
 			case 'u':
@@ -327,15 +335,15 @@ int main(int argc, char *argv[])
 			if (numargs == 0) {
 				cmd_print_breakpoints();
 			} else if (numargs == 1) {
-				bpnum = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				bpnum = parse_long(&cmdargs[argptrs[0]]);
 				if (bpnum < MAX_BREAKPOINTS) {
 					cmd_clear_breakpoint (bpnum);
 				} else {
 					printf("ERROR: breakpoint number must be equal to or between 0 and %u\n", MAX_BREAKPOINTS-1);
 				}
 			} else if (numargs == 2) {
-				bpnum = strtol(&cmdargs[argptrs[0]], NULL, 0);
-				addr = strtol(&cmdargs[argptrs[1]], NULL, 0);
+				bpnum = parse_long(&cmdargs[argptrs[0]]);
+				addr = parse_long(&cmdargs[argptrs[1]]);
 				if (bpnum < MAX_BREAKPOINTS) {
 					cmd_set_breakpoint (bpnum, addr);
 				} else {
@@ -351,13 +359,13 @@ int main(int argc, char *argv[])
 				printf("ERROR: too many arguments\n");
 			} else {
 				if (numargs == 2) {
-					addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
-					len = strtol(&cmdargs[argptrs[1]], NULL, 0);
+					addr = parse_long(&cmdargs[argptrs[0]]);
+					len = parse_long(&cmdargs[argptrs[1]]);
 				} else if (numargs == 0) {
 					addr = 0;
 					len = 16*4;
 				} else {
-					addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
+					addr = parse_long(&cmdargs[argptrs[0]]);
 					len = 16*4;
 				}
 				if ((addr < 0) || (addr     > ((1+MAX_PRU_MEM)*4 - 1)) ||
@@ -390,13 +398,13 @@ int main(int argc, char *argv[])
 				printf("ERROR: too many arguments\n");
 			} else {
 				if (numargs == 2) {
-					addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
-					len = strtol(&cmdargs[argptrs[1]], NULL, 0);
+					addr = parse_long(&cmdargs[argptrs[0]]);
+					len = parse_long(&cmdargs[argptrs[1]]);
 				} else if (numargs == 0) {
 					addr = 0;
 					len = 16;
 				} else {
-					addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
+					addr = parse_long(&cmdargs[argptrs[0]]);
 					len = 16;
 				}
 				if ((addr < 0) || (addr     > MAX_PRU_MEM - 1) ||
@@ -426,7 +434,7 @@ int main(int argc, char *argv[])
 				cmd_run();
 			} else {
 				// set instruction pointer
-				addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				addr = parse_long(&cmdargs[argptrs[0]]);
 
 				// start processor
 //				cmd_run_at(addr);
@@ -459,7 +467,7 @@ int main(int argc, char *argv[])
 			if (numargs != 2) {
 				printf("ERROR: incorrect number of arguments\n");
 			} else {
-				addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				addr = parse_long(&cmdargs[argptrs[0]]);
 				cmd_loadprog(addr, &cmdargs[argptrs[1]]);
 			}
 		}
@@ -469,7 +477,7 @@ int main(int argc, char *argv[])
 			if (numargs != 1) {
 				printf("ERROR: incorrect number of arguments\n");
 			} else {
-				pru_num = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				pru_num = parse_long(&cmdargs[argptrs[0]]);
 				printf("Active PRU is PRU%u.\n\n", pru_num);
 			}
 		}
@@ -490,11 +498,11 @@ int main(int argc, char *argv[])
 			while (strlen(cmd+i) != 0 && isspace(cmd[i]))
 				++i;
 
-			i = strtol(cmd+i + 1, NULL, 0);
+			i = parse_long(cmd+i + 1);
 			if (numargs == 0) {
 				cmd_printreg(i);
 			} else if (numargs == 1) {
-				unsigned int value = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				unsigned int value = parse_long(&cmdargs[argptrs[0]]);
 				cmd_setreg(i, value);
 			} else {
 				printf("ERROR: too many arguments\n");
@@ -527,7 +535,7 @@ int main(int argc, char *argv[])
 			if (numargs == 0) {
 				cmd_print_watch();
 			} else if (numargs == 1) {
-				wanum = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				wanum = parse_long(&cmdargs[argptrs[0]]);
 				if (wanum < MAX_WATCH) {
 					cmd_clear_watch (wanum);
 				} else {
@@ -536,10 +544,10 @@ int main(int argc, char *argv[])
 			} else if (numargs >= 2 && numargs <= 3) {
 				unsigned int len = 4;
 
-				wanum = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				wanum = parse_long(&cmdargs[argptrs[0]]);
 				addr = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
 				if (numargs == 3)
-					len = strtol(&cmdargs[argptrs[2]], NULL, 0);
+					len = parse_long(&cmdargs[argptrs[2]]);
 				if (wanum < MAX_WATCH) {
 					cmd_set_watch_any (wanum, addr, len);
 				} else {
@@ -550,13 +558,12 @@ int main(int argc, char *argv[])
 			} else if (numargs >= 5) {
 				unsigned char vlist[MAX_WATCH_LEN];
 
-				wanum = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				wanum = parse_long(&cmdargs[argptrs[0]]);
 				addr  = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
 
 				/* gather all the values */
 				for(i = 3; i < numargs; ++i) {
-					vlist[i-3] = 0xff
-						   & strtol(&cmdargs[argptrs[i]], NULL, 0);
+					vlist[i-3] = 0xff & parse_long(&cmdargs[argptrs[i]]);
 				}
 
 				if (wanum < MAX_WATCH) {
@@ -573,7 +580,7 @@ int main(int argc, char *argv[])
 			 (!strcmp(cmd, "WRD")) ||
 			 (!strcmp(cmd, "WRI"))) {  // WR - Write Raw
 			last_cmd = LAST_CMD_NONE;
-			addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
+			addr = parse_long(&cmdargs[argptrs[0]]);
 			if (numargs < 2) {
 				printf("ERROR: too few arguments\n");
 			} else {
@@ -595,7 +602,7 @@ int main(int argc, char *argv[])
 					printf("Write to absolute address 0x%04x\n", offset+addr);
 					for (i=1; i<numargs; ++i)
 						pru_u8[offset+addr+i-1] =
-							(unsigned char) (strtol(&cmdargs[argptrs[i]], NULL, 0) & 0xFF);
+							(unsigned char)(parse_long(&cmdargs[argptrs[i]]) & 0xFF);
 				}
 			}
 		}
