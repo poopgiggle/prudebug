@@ -129,12 +129,12 @@ int strcmpci(char *str1, char *str2, int m) {
 	return r;
 }
 
-/* This function adds 0b... format recognition to strtol */
+/* This function adds 0b... format recognition to strtoll */
 static long parse_long(const char * str) {
 	if (strlen(str) > 2 && strncmp(str, "0b", 2) == 0) {
-		return strtol(str+2, NULL, 2);
+		return strtoll(str+2, NULL, 2);
 	}
-	return strtol(str, NULL, 0);
+	return strtoll(str, NULL, 0);
 }
 
 static size_t parse_addr(const char * str, const regex_t * reg_regex) {
@@ -145,7 +145,7 @@ static size_t parse_addr(const char * str, const regex_t * reg_regex) {
 			++str;
 
 		/* Need to make register address offset by data base */
-		addr = strtol(str+1, NULL, 10)
+		addr = strtoll(str+1, NULL, 10)
 		     + (PRU_INTGPR_REG + pru_ctrl_base[pru_num]
 			- pru_data_base[pru_num]);
 		/* convert this to a byte address */
