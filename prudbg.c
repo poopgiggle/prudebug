@@ -140,7 +140,11 @@ static long parse_long(const char * str) {
 static size_t parse_addr(const char * str, const regex_t * reg_regex) {
 	size_t addr;
 
-	if (!regexec(reg_regex, str, 0, NULL, 0)) {
+	if (!strcasecmp(str, "cycle")) {
+		addr = pru_ctrl_base[pru_num] + PRU_CYCLE_REG
+			- pru_data_base[pru_num];
+		addr *= 4;
+	} else if (!regexec(reg_regex, str, 0, NULL, 0)) {
 		while (strlen(str) != 0 && isspace(str[0]))
 			++str;
 
@@ -354,6 +358,26 @@ int main(int argc, char *argv[])
 			}
 		}
 
+		else if (!strcmp(cmd, "CYCLE")) {				// CYCLE - Print/clear/[en|dis]able CYCLE counter
+			last_cmd = LAST_CMD_NONE;
+			if (numargs == 0) {
+				cmd_print_ctrlreg_uint("CYCLE", PRU_CYCLE_REG);
+			} else if (numargs == 1) {
+				if (!strncmp(&cmdargs[argptrs[0]], "on", 2)) {
+					cmd_set_ctrlreg_bits(PRU_CTRL_REG, PRU_REG_COUNT_EN);
+				} else if (!strncmp(&cmdargs[argptrs[0]], "off", 3)) {
+					cmd_clr_ctrlreg_bits(PRU_CTRL_REG, PRU_REG_COUNT_EN);
+				} else if (!strncmp(&cmdargs[argptrs[0]], "clear", 5)) {
+					/* all writes clear the register */
+					cmd_set_ctrlreg(PRU_CYCLE_REG, 0);
+				} else {
+					printf("ERROR: invalid argument\n");
+				}
+			} else {
+				printf("ERROR: too many arguments\n");
+			}
+		}
+
 		else if ((!strcmp(cmd, "D")) || (!strcmp(cmd, "DD")) || (!strcmp(cmd, "DI"))) {	// D - Dump command
 			if (numargs > 2) {
 				printf("ERROR: too many arguments\n");
@@ -444,11 +468,15 @@ int main(int argc, char *argv[])
 
 		else if (!strcmp(cmd, "GSS")) {					// GSS - Start program using single stepping to provde BP/Watch
 			last_cmd = LAST_CMD_NONE;
-			if (numargs > 0) {
+			if (numargs > 1) {
 				printf("ERROR: too many arguments\n");
 			} else {
+				long nss = 0;
+				if (numargs == 1) {
+					nss = parse_long(&cmdargs[argptrs[0]]);
+				}
 				// halt the processor
-				cmd_runss();
+				cmd_runss(nss);
 			}
 		}
 
@@ -491,7 +519,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!regexec(&reg_regex, cmd, 0, NULL, 0)) {					// R[0..31] - Read/Write single PRU registers
+		else if (!regexec(&reg_regex, cmd, 0, NULL, 0)) {		// R[0..31] - Read/Write single PRU registers
 			last_cmd = LAST_CMD_NONE;
 			i = 0;
 			/* skip leading white space */
@@ -509,7 +537,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "RESET")) {					// RESET - Reset PRU
+		else if (!strcmp(cmd, "RESET")) {				// RESET - Reset PRU
 			last_cmd = LAST_CMD_NONE;
 			if (numargs > 0) {
 				printf("ERROR: too many arguments\n");

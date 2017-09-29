@@ -182,7 +182,8 @@ void cmd_printregs()
 
 	disassemble(inst_str, pru[pru_inst_base[pru_num] + (status_reg&0xFFFF)]);
 	printf("    Program counter: 0x%04x\n", (status_reg&0xFFFF));
-	printf("      Current instruction: %s\n\n", inst_str);
+	printf("      Current instruction: %s\n", inst_str);
+	printf("      Cycle counter: %d\n\n", pru[pru_ctrl_base[pru_num] + PRU_CYCLE_REG]);
 
 	if (ctrl_reg&PRU_REG_RUNSTATE) {
 		printf("    Rxx registers not available since PRU is RUNNING.\n");
@@ -227,18 +228,51 @@ void cmd_setreg(int i, unsigned int value)
 	}
 }
 
+// print current single specific PRU registers
+void cmd_print_ctrlreg(const char * name, unsigned int i)
+{
+	printf("%s: 0x%08x\n\n", name, pru[pru_ctrl_base[pru_num] + i]);
+}
+
+// print current single specific PRU registers
+void cmd_print_ctrlreg_uint(const char * name, unsigned int i)
+{
+	printf("%s: %u\n\n", name, pru[pru_ctrl_base[pru_num] + i]);
+}
+
+// print current single specific PRU registers
+void cmd_set_ctrlreg(unsigned int i, unsigned int value)
+{
+	pru[pru_ctrl_base[pru_num] + i] = value;
+}
+
+// print current single specific PRU registers
+void cmd_set_ctrlreg_bits(unsigned int i, unsigned int bits)
+{
+	pru[pru_ctrl_base[pru_num] + i] |= bits;
+}
+
+// print current single specific PRU registers
+void cmd_clr_ctrlreg_bits(unsigned int i, unsigned int bits)
+{
+	pru[pru_ctrl_base[pru_num] + i] &= ~bits;
+}
+
 // start PRU running
 void cmd_run()
 {
 	unsigned int		ctrl_reg;
 
+	// disable single step mode and enable processor
 	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
 	ctrl_reg |= PRU_REG_PROC_EN;
+	ctrl_reg &= ~PRU_REG_SINGLE_STEP;
 	pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
 }
 
 // run PRU in a single stepping mode - used for breakpoints and watch variables
-void cmd_runss()
+// if count is -1, iterate forever, otherwise count down till zero
+void cmd_runss(long count)
 {
 	unsigned int		i, addr;
 	unsigned int		done = 0;
@@ -248,10 +282,19 @@ void cmd_runss()
 	struct timeval		tv;
 	int			r;
 
-	printf("Running (will run until a breakpoint is hit or a key is pressed)....\n");
+	if (count > 0) {
+		printf("Running (will run for %d steps or until a breakpoint is hit or a key is pressed)....\n", count);
+	} else {
+		count = -1;
+		printf("Running (will run until a breakpoint is hit or a key is pressed)....\n");
+	}
 
 	// enter single-step loop
 	do {
+		// decrease count
+		if (count > 0)
+			--count;
+
 		// prep some 'select' magic to detect keypress to escape
 		FD_ZERO(&rd_fdset);
 		FD_SET(STDIN_FILENO, &rd_fdset);
@@ -315,7 +358,7 @@ void cmd_runss()
 
 		// increase time
 		t_cyc++;
-	} while ((!done) && (r == 0));
+	} while ((!done) && (r == 0) && (count != 0));
 
 	// if there is a character in the stdin queue, read the character
 	if (r > 0) getchar();
@@ -324,6 +367,12 @@ void cmd_runss()
 
 	// print the registers
 	cmd_printregs();
+
+	// disable single step mode and disable processor
+	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+	ctrl_reg &= ~PRU_REG_PROC_EN;
+	ctrl_reg &= ~PRU_REG_SINGLE_STEP;
+	pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
 }
 
 void cmd_single_step()

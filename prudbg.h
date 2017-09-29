@@ -32,9 +32,10 @@
 #define MAX_WATCH_LEN		32
 #define MAX_PROC_NAME		20
 
-// register offsets
+// register offsets [4-byte word address offsets]
 #define PRU_CTRL_REG		0x0000
 #define PRU_STATUS_REG		0x0001
+#define PRU_CYCLE_REG		0x0003
 #define PRU_INTGPR_REG		0x0100
 
 // PRU control register bit flags
