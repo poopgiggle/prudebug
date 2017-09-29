@@ -34,7 +34,8 @@ int cmd_input(char *prompt, char *cmd, char *cmdargs, unsigned int *argptrs, uns
 	if (!buf)
 		return -1;
 
-	add_history(buf);
+	if (strcmp(buf, "") != 0)
+		add_history(buf);
 
 	// replace spaces and return with zeros
 	full_len = strlen(buf);
