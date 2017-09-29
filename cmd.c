@@ -183,7 +183,7 @@ void cmd_printregs()
 	disassemble(inst_str, pru[pru_inst_base[pru_num] + (status_reg&0xFFFF)]);
 	printf("    Program counter: 0x%04x\n", (status_reg&0xFFFF));
 	printf("      Current instruction: %s\n", inst_str);
-	printf("      Cycle counter: %d\n\n", pru[pru_ctrl_base[pru_num] + PRU_CYCLE_REG]);
+	printf("      Cycle counter: %u\n\n", pru[pru_ctrl_base[pru_num] + PRU_CYCLE_REG]);
 
 	if (ctrl_reg&PRU_REG_RUNSTATE) {
 		printf("    Rxx registers not available since PRU is RUNNING.\n");
