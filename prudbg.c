@@ -14,9 +14,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include <termios.h>
 #include <regex.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "prudbg.h"
 #include "uio.h"
@@ -167,7 +167,6 @@ int main(int argc, char *argv[])
 	char			prompt_str[20];
 	char			cmd[MAX_CMD_LEN], cmdargs[MAX_CMDARGS_LEN];
 	unsigned int		argptrs[MAX_ARGS], numargs;
-	struct termios		oldT, newT;
 	unsigned int		i;
 	unsigned int		addr, len, bpnum, offset, wanum;
 	int			opt;
@@ -175,7 +174,7 @@ int main(int argc, char *argv[])
 	int			pru_access_mode, pi, pitemp;
 	char			uio_dev_file[50];
 	regex_t reg_regex;
-	int doregs = regcomp(&reg_regex, "[:space:]*r[0-9]\\+\\>", REG_ICASE);
+	regcomp(&reg_regex, "[:space:]*r[0-9]\\+\\>", REG_ICASE);
 
 	// say hello
 	printf ("PRU Debugger v0.25\n");
@@ -306,7 +305,7 @@ int main(int argc, char *argv[])
 
 	// print some useful info
 	printf("Processor type		%s\n", pdb[pi].processor);
-	printf("PRUSS memory address	0x%08x\n", opt_pruss_addr);
+	printf("PRUSS memory address	0x%08lx\n", opt_pruss_addr);
 	printf("PRUSS memory length	0x%08x\n\n", pdb[pi].pruss_len);
 	printf("         offsets below are in 32-bit word addresses (not ARM byte addresses)\n");
 	printf("         PRU            Instruction    Data         Ctrl\n");

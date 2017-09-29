@@ -21,7 +21,7 @@
 #include "prudbg.h"
 
 // breakpoint management
-int cmd_print_breakpoints()
+void cmd_print_breakpoints()
 {
 	int			i;
 
@@ -37,20 +37,20 @@ int cmd_print_breakpoints()
 }
 
 // set breakpoint
-int cmd_set_breakpoint (unsigned int bpnum, unsigned int addr)
+void cmd_set_breakpoint (unsigned int bpnum, unsigned int addr)
 {
 	bp[pru_num][bpnum].state = BP_ACTIVE;
 	bp[pru_num][bpnum].address = addr;
 }
 
 // clear breakpoint
-int cmd_clear_breakpoint (unsigned int bpnum)
+void cmd_clear_breakpoint (unsigned int bpnum)
 {
 	bp[pru_num][bpnum].state = BP_UNUSED;
 }
 
 // dump data memory
-int cmd_dx_rows (const char * prefix, unsigned char * data, int offset, int addr, int len)
+void cmd_dx_rows (const char * prefix, unsigned char * data, int offset, int addr, int len)
 {
 	int			i, j;
 
@@ -71,12 +71,12 @@ int cmd_dx_rows (const char * prefix, unsigned char * data, int offset, int addr
 	}
 }
 
-int cmd_d_rows (int offset, int addr, int len)
+void cmd_d_rows (int offset, int addr, int len)
 {
 	cmd_dx_rows("", (unsigned char*)pru, offset, addr, len);
 }
 
-int cmd_d (int offset, int addr, int len)
+void cmd_d (int offset, int addr, int len)
 {
 	printf ("Absolute addr = 0x%05x, offset = 0x%05x, Len = %u\n",
 		addr + offset, addr, len);
@@ -85,9 +85,9 @@ int cmd_d (int offset, int addr, int len)
 }
 
 // disassemble instruction memory
-int cmd_dis (int offset, int addr, int len)
+void cmd_dis (int offset, int addr, int len)
 {
-	int			i, j;
+	int			i;
 	char			inst_str[50];
 	unsigned int		status_reg;
 	char			*pc[] = {"  ", ">>"};
@@ -134,7 +134,7 @@ int cmd_loadprog(unsigned int addr, char *fn)
 		} else {
 			read(f, &pru[pru_inst_base[pru_num] + addr], file_info.st_size);
 			close(f);
-			printf("Binary file of size %u bytes loaded into PRU%u instruction RAM.\n", file_info.st_size, pru_num);
+			printf("Binary file of size %ld bytes loaded into PRU%u instruction RAM.\n", file_info.st_size, pru_num);
 		}
 	}
 	return 0;
@@ -283,7 +283,7 @@ void cmd_runss(long count)
 	int			r;
 
 	if (count > 0) {
-		printf("Running (will run for %d steps or until a breakpoint is hit or a key is pressed)....\n", count);
+		printf("Running (will run for %ld steps or until a breakpoint is hit or a key is pressed)....\n", count);
 	} else {
 		count = -1;
 		printf("Running (will run until a breakpoint is hit or a key is pressed)....\n");

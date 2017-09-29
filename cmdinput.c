@@ -25,8 +25,7 @@
 
 int cmd_input(char *prompt, char *cmd, char *cmdargs, unsigned int *argptrs, unsigned int *numargs)
 {
-	unsigned int		i, j, on_zero;
-	char			c, last_char;
+	unsigned int		i, on_zero;
 	unsigned int full_len;
 
 	// collect command until space or return

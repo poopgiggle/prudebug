@@ -96,17 +96,42 @@ extern struct watchvariable	wa[MAX_NUM_OF_PRUS][MAX_WATCH];
 
 
 // function prototypes
+void cmd_print_breakpoints();
+void cmd_set_breakpoint (unsigned int bpnum, unsigned int addr);
+void cmd_clear_breakpoint (unsigned int bpnum);
 int cmd_input(char *prompt, char *cmd, char *cmdargs, unsigned int *argptrs,
 	      unsigned int *numargs);
 void printhelp();
-int cmd_d (int offset, int addr, int len);
-int cmd_d_rows (int offset, int addr, int len);
-int cmd_dx_rows (const char * prefix, unsigned char * data, int offset,
+void cmd_d (int offset, int addr, int len);
+void cmd_d_rows (int offset, int addr, int len);
+void cmd_dx_rows (const char * prefix, unsigned char * data, int offset,
 		 int addr, int len);
 int cmd_loadprog(unsigned int addr, char *fn);
 void cmd_run();
+void cmd_runss(long count);
+void cmd_single_step();
+void cmd_halt();
 void cmd_soft_reset();
+void cmd_dis (int offset, int addr, int len);
 void disassemble(char *str, unsigned int inst);
+
+void cmd_print_watch();
+void cmd_clear_watch (unsigned int wanum);
+void cmd_set_watch_any (unsigned int wanum, unsigned int addr, unsigned int len);
+void cmd_set_watch (unsigned int wanum, unsigned int addr,
+		    unsigned int len, unsigned char * value);
+
+void cmd_printregs();
+void cmd_printreg(unsigned int i);
+void cmd_setreg(int i, unsigned int value);
+void cmd_print_ctrlreg_uint(const char * name, unsigned int i);
+void cmd_print_ctrlreg_uint(const char * name, unsigned int i);
+void cmd_set_ctrlreg(unsigned int i, unsigned int value);
+void cmd_set_ctrlreg_bits(unsigned int i, unsigned int bits);
+void cmd_clr_ctrlreg_bits(unsigned int i, unsigned int bits);
+
+void printhelp();
+void printhelpbrief();
 
 #endif // PRUDBG_H
 

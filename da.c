@@ -137,7 +137,7 @@ void disassemble(char *str, unsigned int inst)
 					Imm2 = (inst & 0x00FF0000) >> 16;
 
 					if (IO) {
-						sprintf(str, "%s R%u%s, 0x%04x", f2_inst[SUBOP], Rd, sis[RdSel], Rs1, sis[Rs1Sel], Imm2);
+						sprintf(str, "%s R%u%s, 0x%04x", f2_inst[SUBOP], Rd, sis[RdSel], Imm2);
 					} else {
 						sprintf(str, "%s R%u%s, R%u%s", f2_inst[SUBOP], Rd, sis[RdSel], Rs2, sis[Rs2Sel]);
 					}
