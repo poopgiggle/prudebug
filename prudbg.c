@@ -29,6 +29,7 @@ unsigned int			pru_ctrl_base[MAX_NUM_OF_PRUS];
 unsigned int			pru_data_base[MAX_NUM_OF_PRUS];
 unsigned int			pru_num = 0;
 unsigned int			last_offset, last_addr, last_len, last_cmd;
+unsigned int			last_n_single_step;
 struct breakpoints		bp[MAX_NUM_OF_PRUS][MAX_BREAKPOINTS];
 struct watchvariable		wa[MAX_NUM_OF_PRUS][MAX_WATCH];
 
@@ -392,12 +393,12 @@ int main(int argc, char *argv[])
 					len = 16*4;
 				}
 				if ((addr < 0) || (addr     > ((1+MAX_PRU_MEM)*4 - 1)) ||
-            (len < 0)  || (addr+len > ((1+MAX_PRU_MEM)*4))) {
+				    (len < 0)  || (addr+len > ((1+MAX_PRU_MEM)*4))) {
 					printf("ERROR: arguments out of range.\n");
 				} else if (numargs > 2) {
 					printf("ERROR: Incorrect format.  Please use help command to get command details.\n");
 				} else {
-          /* The memory is examined byte per byte, so multiply addresses by 4 */
+					/* The memory is examined byte per byte, so multiply addresses by 4 */
 					if (!strcmp(cmd, "DD")) {
 						offset = pru_data_base[pru_num] * 4;
 						last_cmd = LAST_CMD_DD;
@@ -548,12 +549,25 @@ int main(int argc, char *argv[])
 		}
 
 		else if (!strcmp(cmd, "SS")) {					// SS - Single step
-			last_cmd = LAST_CMD_SS;
-			if (numargs > 0) {
+			unsigned int N = 1;
+
+			if (numargs == 1) {
+				N = parse_long(&cmdargs[argptrs[0]]);
+			} else if (numargs > 1) {
+				N = 0;
 				printf("ERROR: too many arguments\n");
-			} else {
+				printf("single-step usage:\n");
+				printf("SS [n_steps]\n");
+			}
+
+			if (N >= 1) {
 				// reset the processor
-				cmd_single_step();
+				if (N > 1) {
+					printf("single-stepping %u times\n", N);
+				}
+				last_cmd = LAST_CMD_SS;
+				last_n_single_step = N;
+				cmd_single_step(N);
 			}
 		}
 
@@ -647,7 +661,7 @@ int main(int argc, char *argv[])
 					break;
 
 				case LAST_CMD_SS:
-					cmd_single_step();
+					cmd_single_step(last_n_single_step);
 					break;
 
 				default:

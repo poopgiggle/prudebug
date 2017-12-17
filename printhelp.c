@@ -96,7 +96,7 @@ void printhelp()
 	printf("RESET\n");
 	printf("    Reset the current PRU\n\n");
 
-	printf("SS\n");
+	printf("SS [n_steps]\n");
 	printf("    Single step the current instruction.\n\n");
 
 	printf("WA [watch_num [<address> [ (len | : value0 [value1 ...]) ]]]\n");

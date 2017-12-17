@@ -109,7 +109,7 @@ void cmd_dx_rows (const char * prefix, unsigned char * data, int offset,
 int cmd_loadprog(unsigned int addr, char *fn);
 void cmd_run();
 void cmd_runss(long count);
-void cmd_single_step();
+void cmd_single_step(unsigned int N);
 void cmd_halt();
 void cmd_soft_reset();
 void cmd_dis (int offset, int addr, int len);

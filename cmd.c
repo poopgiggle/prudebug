@@ -375,14 +375,17 @@ void cmd_runss(long count)
 	pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
 }
 
-void cmd_single_step()
+void cmd_single_step(unsigned int N)
 {
 	unsigned int		ctrl_reg;
+	unsigned int i;
 
-	// set single step mode and enable processor
-	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
-	ctrl_reg |= PRU_REG_PROC_EN | PRU_REG_SINGLE_STEP;
-	pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
+	for (i = 0; i < N; ++i ) {
+		// set single step mode and enable processor
+		ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+		ctrl_reg |= PRU_REG_PROC_EN | PRU_REG_SINGLE_STEP;
+		pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
+	}
 
 	// print the registers
 	cmd_printregs();
