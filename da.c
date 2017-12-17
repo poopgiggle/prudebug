@@ -46,12 +46,17 @@ void disassemble(char *str, unsigned int inst)
 	short			BrOff;
 	char			tempstr[50];
 
-	char			*f1_inst[] = {"ADD", "ADC", "SUB", "SUC", "LSL", "LSR", "RSB", "RSC", "AND", "OR", "XOR", "NOT", "MIN", "MAX", "CLR", "SET"};
+	char			*f1_inst[] = {
+					"ADD", "ADC", "SUB", "SUC", "LSL",
+					"LSR", "RSB", "RSC", "AND", "OR",
+					"XOR", "NOT", "MIN", "MAX", "CLR",
+					"SET"};
 	char			*f2_inst[] = {
-				"JMP", "JAL", "LDI", "LMBD", "SCAN", "HALT",
-				"RESERVED", "RESERVED", "RESERVED", "RESERVED", "RESERVED", "RESERVED", "RESERVED", "RESERVED", "RESERVED", 
-				"SLP"
-				};
+					"JMP", "JAL", "LDI", "LMBD", "SCAN",
+					"HALT", "RESERVED", "RESERVED", "LOOP",
+					"RESERVED", "RESERVED", "RESERVED",
+					"RESERVED", "RESERVED", "RESERVED",
+					"SLP"};
 	char			*f4_inst[] = {"xx", "LT", "EQ", "LE", "GT", "NE", "GE", "A"};
 	char			*f5_inst[] = {"xx", "BC", "BS", "xx"};
 	char			*f6_7_inst[] = {"SBBO", "LBBO"};
@@ -147,6 +152,23 @@ void disassemble(char *str, unsigned int inst)
 				case 5:  // HALT
 					sprintf(str, "%s", f2_inst[SUBOP]);
 					break;
+
+				case 8: { // [I]LOOP
+					const char * I = (inst & (1<<15)) ? "I" : "";
+
+					BrOff  = (short)(inst & 0xff);
+					IO     = (inst & 0x01000000) >> 24;
+					Rs2Sel = (inst & 0x00E00000) >> 21;
+					Rs2    = (inst & 0x001F0000) >> 16;
+					Imm2   = (inst & 0x00FF0000) >> 16;
+
+					if (IO) {
+						sprintf(str, "%s%s %d, 0x%04x", I, f2_inst[SUBOP], BrOff, Imm2);
+					} else {
+						sprintf(str, "%s%s %d, R%u%s", I, f2_inst[SUBOP], BrOff, Rs2, sis[Rs2Sel]);
+					}
+					break;
+				}
 
 				case 15:  // SLP
 					Imm = (inst & 0x00800000) >> 23;
