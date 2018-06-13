@@ -20,6 +20,7 @@
 
 #include "prudbg.h"
 #include "uio.h"
+#include "privs.h"
 
 
 // global variable definitions
@@ -291,6 +292,7 @@ int main(int argc, char *argv[])
 		close(fd);
 		printf ("Using /dev/mem device.\n");
 	}
+	drop_root_privileges();
 
 	// get memory pointer for PRU from /dev/mem
 
