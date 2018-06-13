@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
 	regcomp(&reg_regex, "[:space:]*r[0-9]\\+\\>", REG_ICASE);
 
 	// say hello
-	printf ("PRU Debugger v0.25\n");
+	printf ("PRU Debugger v" VERSION "\n");
 	printf ("(C) Copyright 2011, 2013 by Arctica Technologies.  All rights reserved.\n");
 	printf ("Written by Steven Anderson\n");
 	printf ("\n");
