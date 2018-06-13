@@ -55,7 +55,7 @@ void cmd_dx_rows (const char * prefix, unsigned char * data, int offset, int add
 	int			i, j;
 
 	for (i=0; i<len; ) {
-		printf (prefix);
+		printf ("%s",prefix);
 
 		printf ("[0x%05x]", addr+i);
 
@@ -132,7 +132,9 @@ int cmd_loadprog(unsigned int addr, char *fn)
 		if (f == -1) {
 			printf("ERROR: could not open file 2\n");
 		} else {
-			read(f, &pru[pru_inst_base[pru_num] + addr], file_info.st_size);
+			if (read(f, &pru[pru_inst_base[pru_num] + addr], file_info.st_size) < 0) {
+				perror("loadprog");
+			}
 			close(f);
 			printf("Binary file of size %ld bytes loaded into PRU%u instruction RAM.\n", file_info.st_size, pru_num);
 		}

@@ -243,7 +243,7 @@ int main(int argc, char *argv[])
 	// determine how to obtain the PRU base memory pointer (/dev/mem or a UIO PRUSS driver file - /dev/uio*)
 	if (pru_access_mode == ACCESS_GUESS || pru_access_mode == ACCESS_UIO) {
 		// get the UIO info (a UIO device file for the PRUSS)
-		uio_getprussfile(uio_dev_file);
+		uio_getprussfile(uio_dev_file, sizeof(uio_dev_file));
 		if (uio_dev_file[0] != 0) {
 			// there is a valid UIO/PRUSS file so open it and use the pointer
 			fd = open (uio_dev_file, O_RDWR | O_SYNC);

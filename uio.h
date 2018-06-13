@@ -9,7 +9,7 @@
 #ifndef H_UIO
 #define H_UIO
 
-#define UIO_MAX_UIO_FILEPATH	100		// maximum length of the path and name for a uio file (ex. /sys/class/uio/uio7/name)
+#define UIO_MAX_UIO_FILEPATH	512		// maximum length of the path and name for a uio file (ex. /sys/class/uio/uio7/name)
 #define UIO_MAX_DEV_NAME	50
 
 
@@ -27,7 +27,7 @@ struct uiodev {
 
 
 // prototypes
-int uio_getprussfile(char *devname);
+int uio_getprussfile(char *devname, size_t len);
 
 #endif
 
