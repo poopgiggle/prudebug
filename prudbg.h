@@ -27,13 +27,15 @@
 #define MAX_PRU_MEM		0xFFFF
 #define NUM_OF_PRU		2
 #define MAX_NUM_OF_PRUS		16					// maximum number of PRUs to expect in any processor
-#define MAX_BREAKPOINTS		5
-#define MAX_WATCH		5
+#define MAX_BREAKPOINTS		10
+#define MAX_WATCH		10
+#define MAX_WATCH_LEN		32
 #define MAX_PROC_NAME		20
 
-// register offsets
+// register offsets [4-byte word address offsets]
 #define PRU_CTRL_REG		0x0000
 #define PRU_STATUS_REG		0x0001
+#define PRU_CYCLE_REG		0x0003
 #define PRU_INTGPR_REG		0x0100
 
 // PRU control register bit flags
@@ -79,8 +81,9 @@ struct breakpoints {
 struct watchvariable {
 	unsigned char		state;
 	unsigned int		address;
-	unsigned int		value;
-	unsigned int		old_value;
+	unsigned int		len;
+	unsigned char		value[MAX_WATCH_LEN];
+	unsigned char		old_value[MAX_WATCH_LEN];
 };
 
 
@@ -93,13 +96,42 @@ extern struct watchvariable	wa[MAX_NUM_OF_PRUS][MAX_WATCH];
 
 
 // function prototypes
-int cmd_input(char *prompt, char *cmd, char *cmdargs, unsigned int *argptrs, unsigned int *numargs);
+void cmd_print_breakpoints();
+void cmd_set_breakpoint (unsigned int bpnum, unsigned int addr);
+void cmd_clear_breakpoint (unsigned int bpnum);
+int cmd_input(char *prompt, char *cmd, char *cmdargs, unsigned int *argptrs,
+	      unsigned int *numargs);
 void printhelp();
-int cmd_d (int offset, int addr, int len);
+void cmd_d (int offset, int addr, int len);
+void cmd_d_rows (int offset, int addr, int len);
+void cmd_dx_rows (const char * prefix, unsigned char * data, int offset,
+		 int addr, int len);
 int cmd_loadprog(unsigned int addr, char *fn);
 void cmd_run();
+void cmd_runss(long count);
+void cmd_single_step(unsigned int N);
+void cmd_halt();
 void cmd_soft_reset();
+void cmd_dis (int offset, int addr, int len);
 void disassemble(char *str, unsigned int inst);
+
+void cmd_print_watch();
+void cmd_clear_watch (unsigned int wanum);
+void cmd_set_watch_any (unsigned int wanum, unsigned int addr, unsigned int len);
+void cmd_set_watch (unsigned int wanum, unsigned int addr,
+		    unsigned int len, unsigned char * value);
+
+void cmd_printregs();
+void cmd_printreg(unsigned int i);
+void cmd_setreg(int i, unsigned int value);
+void cmd_print_ctrlreg_uint(const char * name, unsigned int i);
+void cmd_print_ctrlreg_uint(const char * name, unsigned int i);
+void cmd_set_ctrlreg(unsigned int i, unsigned int value);
+void cmd_set_ctrlreg_bits(unsigned int i, unsigned int bits);
+void cmd_clr_ctrlreg_bits(unsigned int i, unsigned int bits);
+
+void printhelp();
+void printhelpbrief();
 
 #endif // PRUDBG_H
 

@@ -17,7 +17,7 @@
 
 
 // get UIO devices and put into structure
-int uio_getprussfile(char *devname)
+int uio_getprussfile(char *devname, size_t len)
 {
 	DIR			*d;
 	struct dirent		*dent;
@@ -39,12 +39,14 @@ int uio_getprussfile(char *devname)
 		// determine if this is a uio* file
 		if (dent->d_name[0] == 'u' && dent->d_name[1] == 'i' && dent->d_name[2] == 'o' && devname[0] == 0) {
 			// get uio device name and version
-			sprintf(fn, "/sys/class/uio/%s/name", dent->d_name);
+			snprintf(fn, UIO_MAX_UIO_FILEPATH, "/sys/class/uio/%s/name", dent->d_name);
 			fd = fopen (fn, "r");
-			fgets(s_name, UIO_MAX_DEV_NAME, fd);
+			if (fgets(s_name, UIO_MAX_DEV_NAME, fd) == NULL) {
+				printf("Could not read from /sys/class/uio/%s/name\n", dent->d_name);
+			}
 			s_name[strlen(s_name)-1] = 0;
 			if (!strncmp(s_name, "pruss", 5)) {
-				sprintf(devname, "/dev/%s", dent->d_name);
+				snprintf(devname, len, "/dev/%s", dent->d_name);
 			}
 			fclose(fd);
 		}
