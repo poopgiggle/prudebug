@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <termios.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 #include "prudbg.h"
 #include "uio.h"
@@ -296,17 +297,17 @@ int main(int argc, char *argv[])
 		cmd_input(prompt_str, cmd, cmdargs, argptrs, &numargs);
 
 		// do something with command info
-		if (!strcmp(cmd, "?") || !strcmp(cmd, "HELP")) {		// HELP - help command
+		if (!strncmp(cmd, "?", sizeof("?")) || !strncmp(cmd, "HELP", sizeof("HELP"))) {		// HELP - help command
 			last_cmd = LAST_CMD_NONE;
 			printhelp();
 		}
 
-		else if (!strcmp(cmd, "HB")) {					// brief HELP
+		else if (!strncmp(cmd, "HB", sizeof("HB"))) {					// brief HELP
 			last_cmd = LAST_CMD_NONE;
 			printhelpbrief();			
 		}
 
-		else if (!strcmp(cmd, "BR")) {					// BR - Breakpoint command
+		else if (!strncmp(cmd, "BR", sizeof("BR"))) {					// BR - Breakpoint command
 			last_cmd = LAST_CMD_NONE;
 			if (numargs == 0) {
 				cmd_print_breakpoints();
@@ -330,7 +331,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if ((!strcmp(cmd, "D")) || (!strcmp(cmd, "DD")) || (!strcmp(cmd, "DI"))) {	// D - Dump command
+		else if ((!strncmp(cmd, "D", sizeof("D"))) || (!strncmp(cmd, "DD", sizeof("DD"))) || (!strncmp(cmd, "DI", sizeof("DI")))) {	// D - Dump command
 			if (numargs > 2) {
 				printf("ERROR: too many arguments\n");
 			} else {
@@ -368,7 +369,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "DIS")) {						// DIS - disassemble command
+		else if (!strncmp(cmd, "DIS", sizeof("DIS"))) {						// DIS - disassemble command
 			if (numargs > 2) {
 				printf("ERROR: too many arguments\n");
 			} else {
@@ -399,7 +400,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "G")) {					// G - Start program
+		else if (!strncmp(cmd, "G", sizeof("G"))) {					// G - Start program
 			last_cmd = LAST_CMD_NONE;
 			if (numargs > 1) {
 				printf("ERROR: too many arguments\n");
@@ -416,7 +417,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "GSS")) {					// GSS - Start program using single stepping to provde BP/Watch
+		else if (!strncmp(cmd, "GSS", sizeof("GSS"))) {					// GSS - Start program using single stepping to provde BP/Watch
 			last_cmd = LAST_CMD_NONE;
 			if (numargs > 0) {
 				printf("ERROR: too many arguments\n");
@@ -426,7 +427,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "HALT")) {					// HALT - Halt PRU
+		else if (!strncmp(cmd, "HALT", sizeof("HALT"))) {					// HALT - Halt PRU
 			last_cmd = LAST_CMD_NONE;
 			if (numargs > 0) {
 				printf("ERROR: too many arguments\n");
@@ -436,7 +437,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "L")) {					// L - Load PRU program
+		else if (!strncmp(cmd, "L", sizeof("L"))) {					// L - Load PRU program
 			last_cmd = LAST_CMD_NONE;
 			if (numargs != 2) {
 				printf("ERROR: incorrect number of arguments\n");
@@ -446,7 +447,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "PRU")) {					// PRU - Select the active PRU
+		else if (!strncmp(cmd, "PRU", sizeof("PRU"))) {					// PRU - Select the active PRU
 			last_cmd = LAST_CMD_NONE;
 			if (numargs != 1) {
 				printf("ERROR: incorrect number of arguments\n");
@@ -456,7 +457,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "R")) {					// R - Print PRU registers
+		else if (!strncmp(cmd, "R", sizeof("R"))) {					// R - Print PRU registers
 			last_cmd = LAST_CMD_NONE;
 			if (numargs != 0) {
 				printf("ERROR: incorrect number of arguments\n");
@@ -465,7 +466,7 @@ int main(int argc, char *argv[])
 			}
 		}		
 
-		else if (!strcmp(cmd, "RESET")) {					// RESET - Reset PRU
+		else if (!strncmp(cmd, "RESET", sizeof("RESET"))) {					// RESET - Reset PRU
 			last_cmd = LAST_CMD_NONE;
 			if (numargs > 0) {
 				printf("ERROR: too many arguments\n");
@@ -476,7 +477,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "SS")) {					// SS - Single step
+		else if (!strncmp(cmd, "SS", sizeof("SS"))) {					// SS - Single step
 			last_cmd = LAST_CMD_SS;
 			if (numargs > 0) {
 				printf("ERROR: too many arguments\n");
@@ -486,7 +487,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "WA")) {					// WA - Watch command
+		else if (!strncmp(cmd, "WA", sizeof("WA"))) {					// WA - Watch command
 			last_cmd = LAST_CMD_NONE;
 			if (numargs == 0) {
 				cmd_print_watch();
@@ -519,7 +520,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if ((!strcmp(cmd, "WR")) || (!strcmp(cmd, "WRD")) || (!strcmp(cmd, "WRI"))) {  // WR - Write Raw
+		else if ((!strncmp(cmd, "WR", sizeof("WR"))) || (!strncmp(cmd, "WRD", sizeof("WRD"))) || (!strncmp(cmd, "WRI", sizeof("WRI")))) {  // WR - Write Raw
 			last_cmd = LAST_CMD_NONE;
 			addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
 			if (numargs < 2) {
@@ -528,9 +529,9 @@ int main(int argc, char *argv[])
 				if ((addr < 0) || (addr > MAX_PRU_MEM - 1)) {
 					printf("ERROR: arguments out of range.\n");
 				} else {
-					if (!strcmp(cmd, "WRD")) {
+					if (!strncmp(cmd, "WRD", sizeof("WRD"))) {
 						offset = pru_data_base[pru_num];
-					} else if (!strcmp(cmd, "WRI")) {
+					} else if (!strncmp(cmd, "WRI", sizeof("WRI"))) {
 						offset = pru_inst_base[pru_num];
 					} else {
 						offset = 0;
@@ -541,10 +542,10 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		else if (!strcmp(cmd, "Q")) {					// dummy so it's a valid command
+		else if (!strncmp(cmd, "Q", sizeof("Q"))) {					// dummy so it's a valid command
 		}
 
-		else if (!strcmp(cmd, "")) {					// repeat display command option
+		else if (!strncmp(cmd, "", sizeof(""))) {					// repeat display command option
 			switch(last_cmd) {
 				case LAST_CMD_D:
 				case LAST_CMD_DD:
@@ -567,7 +568,7 @@ int main(int argc, char *argv[])
 			printf("Invalid command.\n\n");
 		}
 
-	} while (strcmp(cmd, "Q"));
+	} while (strncmp(cmd, "Q", sizeof("Q")));
 
 	printf("\nGoodbye.\n\n");
 
