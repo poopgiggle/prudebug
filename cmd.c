@@ -20,7 +20,7 @@
 #include "prudbg.h"
 
 // breakpoint management
-int cmd_print_breakpoints()
+int cmd_print_breakpoints(void)
 {
 	int			i;
 
@@ -81,7 +81,7 @@ int cmd_dis (int offset, int addr, int len)
 }
 
 // halt the current PRU
-void cmd_halt()
+void cmd_halt(void)
 {
 	unsigned int		ctrl_reg;
 
@@ -118,7 +118,7 @@ int cmd_loadprog(unsigned int addr, char *fn)
 }
 
 // print current PRU registers
-void cmd_printregs()
+void cmd_printregs(void)
 {
 	unsigned int		ctrl_reg, reset_pc, status_reg;
 	char			*run_state, *single_step, *cycle_cnt_en, *pru_sleep, *proc_en;
@@ -171,7 +171,7 @@ void cmd_printregs()
 }
 
 // start PRU running
-void cmd_run()
+void cmd_run(void)
 {
 	unsigned int		ctrl_reg;
 
@@ -181,7 +181,7 @@ void cmd_run()
 }
 
 // run PRU in a single stepping mode - used for breakpoints and watch variables
-void cmd_runss()
+void cmd_runss(void)
 {
 	unsigned int		i, addr;
 	unsigned int		done = 0;
@@ -244,7 +244,7 @@ void cmd_runss()
 	cmd_printregs();
 }
 
-void cmd_single_step()
+void cmd_single_step(void)
 {
 	unsigned int		ctrl_reg;
 
@@ -263,7 +263,7 @@ void cmd_single_step()
 	pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
 }
 
-void cmd_soft_reset()
+void cmd_soft_reset(void)
 {
 	unsigned int		ctrl_reg;
 
@@ -275,7 +275,7 @@ void cmd_soft_reset()
 }
 
 // print list of watches
-void cmd_print_watch()
+void cmd_print_watch(void)
 {
 	int			i;
 
