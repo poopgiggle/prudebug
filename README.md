@@ -1,4 +1,4 @@
-NOTE: THIS IS NOT MY CODE. I'm hosting this here to back up my own changes in case my laptop and BeagleBone get
+**NOTE:** THIS IS NOT MY CODE. I'm hosting this here to back up my own changes in case my laptop and BeagleBone get
 lost in a fire or something. 
 
 
@@ -60,7 +60,11 @@ CONTRIBUTORS
 INSTALLATION
 ---------------------------------------------------------------------
 To build just run make in the source code directory (make sure you have the correct cross-compiler in place and in the path - 
-arm-none-linux-gnueabi-gcc).  The binary is called prudebug.
+arm-none-linux-gnueabi-gcc). You may also need to run 
+```sh
+sudo apt-get install libreadline-dev
+```
+to install the readline library. The binary is called prudebug.
 
 
 USAGE
