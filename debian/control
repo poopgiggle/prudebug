@@ -1,0 +1,25 @@
+Source: prudebug
+Section: universe/embedded
+Priority: optional
+Build-Depends: debhelper (>= 9)
+Maintainer: Spencer E. Olson <olsonse@umich.edu>
+Standards-Version: 3.9.2
+Homepage: https://github.com/olsonse/prudebug
+Vcs-Git: https://github.com/olsonse/prudebug.git
+
+Package: prudebug
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Very small debugger for the TI Programmable Realtime Units.
+ Debugging a pru does not take advantage of any hardware debugging helps such as
+ hardware breakpointing and such.  Nonetheless, prudebug allows a fairly
+ functional set of debugging tasks, such as single stepping, software
+ breakpointing, and software memory watches.  Registers and PRU memory can also
+ be examined and written to.
+ .
+ Prudebug uses either UIO or /dev/mem to mmap the PRU address space.  If UIO is
+ not available and /dev/mem must be used, prudebug must either be setuid(root)
+ or executed via sudo.  In either case, prudebug attempts to drop all root
+ privileges after mmap'ing the appropriate address space.
+ .
+ This package does not install prudebug with setuid(root).

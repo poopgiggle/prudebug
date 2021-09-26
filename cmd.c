@@ -1,4 +1,4 @@
-/* 
+/*
  *
  *  PRU Debug Program
  *  (c) Copyright 2011, 2013 by Arctica Technologies
@@ -16,11 +16,12 @@
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
+#include <string.h>
 
 #include "prudbg.h"
 
 // breakpoint management
-int cmd_print_breakpoints()
+void cmd_print_breakpoints()
 {
 	int			i;
 
@@ -36,46 +37,82 @@ int cmd_print_breakpoints()
 }
 
 // set breakpoint
-int cmd_set_breakpoint (unsigned int bpnum, unsigned int addr)
+void cmd_set_breakpoint (unsigned int bpnum, unsigned int addr)
 {
 	bp[pru_num][bpnum].state = BP_ACTIVE;
 	bp[pru_num][bpnum].address = addr;
 }
 
 // clear breakpoint
-int cmd_clear_breakpoint (unsigned int bpnum)
+void cmd_clear_breakpoint (unsigned int bpnum)
 {
 	bp[pru_num][bpnum].state = BP_UNUSED;
 }
 
 // dump data memory
-int cmd_d (int offset, int addr, int len)
+void cmd_dx_rows (const char * prefix, unsigned char * data, int offset, int addr, int len)
 {
 	int			i, j;
 
 	for (i=0; i<len; ) {
-		printf ("[0x%04x] ", addr+i);
-		for (j=0;(i<len)&&(j<4); i++,j++) printf ("0x%08x ", pru[offset+addr+i]);
+		printf ("%s",prefix);
+
+		printf ("[0x%05x]", addr+i);
+
+		for (j=0; (i<len) && (j<8); ++i, ++j)
+			printf (" %02x", data[offset+addr+i]);
+
+		printf ("-");
+
+		for (j=0; (i<len) && (j<8); ++i, ++j)
+			printf ("%02x ", data[offset+addr+i]);
+
 		printf ("\n");
 	}
+}
+
+void cmd_d_rows (int offset, int addr, int len)
+{
+	cmd_dx_rows("", (unsigned char*)pru, offset, addr, len);
+}
+
+void cmd_d (int offset, int addr, int len)
+{
+	printf ("Absolute addr = 0x%05x, offset = 0x%05x, Len = %u\n",
+		addr + offset, addr, len);
+	cmd_d_rows(offset, addr, len);
 	printf("\n");
 }
 
 // disassemble instruction memory
-int cmd_dis (int offset, int addr, int len)
+void cmd_dis (int offset, int addr, int len)
 {
-	int			i, j;
+	int			i, k;
 	char			inst_str[50];
 	unsigned int		status_reg;
-	char			*pc[] = {"  ", ">>"};
+	const char		*br_str[] = {" ", "*"};
+	int			on_br = 0;
+	const char		*pc[] = {"  ", ">>"};
 	int			pc_on = 0;
 
 	status_reg = (pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG]) & 0xFFFF;
 
 	for (i=0; i<len; i++) {
-		if (status_reg == (addr + i)) pc_on = 1; else pc_on = 0;
+		pc_on = (status_reg == (addr + i)) ? 1 : 0;
+
+		on_br = 0;
+		for (k=0; k<MAX_BREAKPOINTS; ++k) {
+			if ((bp[pru_num][k].state == BP_ACTIVE) &&
+			    (bp[pru_num][k].address == (addr + i))) {
+				on_br = 1;
+				break;
+			}
+		}
+
 		disassemble(inst_str, pru[offset+addr+i]);
-		printf ("[0x%04x] 0x%08x %s %s\n", addr+i, pru[offset+addr+i], pc[pc_on], inst_str);
+		printf("[0x%04x] 0x%08x %s %s %s\n",
+		       addr+i, pru[offset+addr+i], br_str[on_br], pc[pc_on],
+		       inst_str);
 	}
 	printf("\n");
 }
@@ -109,9 +146,11 @@ int cmd_loadprog(unsigned int addr, char *fn)
 		if (f == -1) {
 			printf("ERROR: could not open file 2\n");
 		} else {
-			read(f, &pru[pru_inst_base[pru_num] + addr], file_info.st_size);
+			if (read(f, &pru[pru_inst_base[pru_num] + addr], file_info.st_size) < 0) {
+				perror("loadprog");
+			}
 			close(f);
-			printf("Binary file of size %u bytes loaded into PRU%u instruction RAM.\n", file_info.st_size, pru_num);
+			printf("Binary file of size %ld bytes loaded into PRU%u instruction RAM.\n", file_info.st_size, pru_num);
 		}
 	}
 	return 0;
@@ -159,15 +198,80 @@ void cmd_printregs()
 
 	disassemble(inst_str, pru[pru_inst_base[pru_num] + (status_reg&0xFFFF)]);
 	printf("    Program counter: 0x%04x\n", (status_reg&0xFFFF));
-	printf("      Current instruction: %s\n\n", inst_str);
+	printf("      Current instruction: %s\n", inst_str);
+	printf("      Cycle counter: %u\n\n", pru[pru_ctrl_base[pru_num] + PRU_CYCLE_REG]);
 
 	if (ctrl_reg&PRU_REG_RUNSTATE) {
 		printf("    Rxx registers not available since PRU is RUNNING.\n");
 	} else {
-		for (i=0; i<8; i++) printf("    R%02u: 0x%08x    R%02u: 0x%08x    R%02u: 0x%08x    R%02u: 0x%08x\n", i, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i], i+8, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 8], i+16, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 16], i+24, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 24]);
+		for (i=0; i<8; i++)
+      printf("    R%02u: 0x%08x    R%02u: 0x%08x    R%02u: 0x%08x    R%02u: 0x%08x\n",
+             i,    pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i],
+             i+8,  pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 8],
+             i+16, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 16],
+             i+24, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i + 24]);
 	}
 
 	printf("\n");
+}
+
+// print current single specific PRU registers
+void cmd_printreg(unsigned int i)
+{
+	unsigned int		ctrl_reg;
+
+	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+
+	if (ctrl_reg&PRU_REG_RUNSTATE) {
+		printf("Rxx registers not available since PRU is RUNNING.\n");
+	} else {
+		printf("R%02u: 0x%08x\n\n",
+		       i, pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i]);
+	}
+}
+
+// print current single specific PRU registers
+void cmd_setreg(int i, unsigned int value)
+{
+	unsigned int		ctrl_reg;
+
+	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+
+	if (ctrl_reg&PRU_REG_RUNSTATE) {
+		printf("Rxx registers not available since PRU is RUNNING.\n");
+	} else {
+		pru[pru_ctrl_base[pru_num] + PRU_INTGPR_REG + i] = value;
+	}
+}
+
+// print current single specific PRU registers
+void cmd_print_ctrlreg(const char * name, unsigned int i)
+{
+	printf("%s: 0x%08x\n\n", name, pru[pru_ctrl_base[pru_num] + i]);
+}
+
+// print current single specific PRU registers
+void cmd_print_ctrlreg_uint(const char * name, unsigned int i)
+{
+	printf("%s: %u\n\n", name, pru[pru_ctrl_base[pru_num] + i]);
+}
+
+// print current single specific PRU registers
+void cmd_set_ctrlreg(unsigned int i, unsigned int value)
+{
+	pru[pru_ctrl_base[pru_num] + i] = value;
+}
+
+// print current single specific PRU registers
+void cmd_set_ctrlreg_bits(unsigned int i, unsigned int bits)
+{
+	pru[pru_ctrl_base[pru_num] + i] |= bits;
+}
+
+// print current single specific PRU registers
+void cmd_clr_ctrlreg_bits(unsigned int i, unsigned int bits)
+{
+	pru[pru_ctrl_base[pru_num] + i] &= ~bits;
 }
 
 // start PRU running
@@ -175,13 +279,16 @@ void cmd_run()
 {
 	unsigned int		ctrl_reg;
 
+	// disable single step mode and enable processor
 	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
 	ctrl_reg |= PRU_REG_PROC_EN;
+	ctrl_reg &= ~PRU_REG_SINGLE_STEP;
 	pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
 }
 
 // run PRU in a single stepping mode - used for breakpoints and watch variables
-void cmd_runss()
+// if count is -1, iterate forever, otherwise count down till zero
+void cmd_runss(long count)
 {
 	unsigned int		i, addr;
 	unsigned int		done = 0;
@@ -191,10 +298,19 @@ void cmd_runss()
 	struct timeval		tv;
 	int			r;
 
-	printf("Running (will run until a breakpoint is hit or a key is pressed)....\n");
+	if (count > 0) {
+		printf("Running (will run for %ld steps or until a breakpoint is hit or a key is pressed)....\n", count);
+	} else {
+		count = -1;
+		printf("Running (will run until a breakpoint is hit or a key is pressed)....\n");
+	}
 
 	// enter single-step loop
 	do {
+		// decrease count
+		if (count > 0)
+			--count;
+
 		// prep some 'select' magic to detect keypress to escape
 		FD_ZERO(&rd_fdset);
 		FD_SET(STDIN_FILENO, &rd_fdset);
@@ -205,19 +321,44 @@ void cmd_runss()
 		ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
 		ctrl_reg |= PRU_REG_PROC_EN | PRU_REG_SINGLE_STEP;
 		pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
-		
+
 		// check if we've hit a breakpoint
 		addr = pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG] & 0xFFFF;
 		for (i=0; i<MAX_BREAKPOINTS; i++) if ((bp[pru_num][i].state == BP_ACTIVE) && (bp[pru_num][i].address == addr)) done = 1;
 
 		// check if we've hit a watch point
 //		addr = pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG] & 0xFFFF;
-		for (i=0; i<MAX_WATCH; i++) {
-			if ((wa[pru_num][i].state == WA_PRINT_ON_ANY) && (wa[pru_num][i].old_value != pru[pru_data_base[pru_num] + wa[pru_num][i].address])) {
-				printf("[0x%04x]  0x%04x  t=%lu\n", wa[pru_num][i].address, pru[pru_data_base[pru_num] + wa[pru_num][i].address], t_cyc);
-				wa[pru_num][i].old_value = pru[pru_data_base[pru_num] + wa[pru_num][i].address];
-			} else if ((wa[pru_num][i].state == WA_HALT_ON_VALUE) && (wa[pru_num][i].value == pru[pru_data_base[pru_num] + wa[pru_num][i].address])) {
-				printf("[0x%04x]  0x%04x  t=%lu\n", wa[pru_num][i].address, pru[pru_data_base[pru_num] + wa[pru_num][i].address], t_cyc);	
+		for (i=0; i<MAX_WATCH; ++i) {
+			unsigned char *pru_u8 = (unsigned char*)pru;
+
+			if ((wa[pru_num][i].state == WA_PRINT_ON_ANY) &&
+			    (memcmp(wa[pru_num][i].old_value,
+				    pru_u8 + pru_data_base[pru_num]*4
+					   + wa[pru_num][i].address,
+				    wa[pru_num][i].len) != 0)) {
+
+				printf("@0x%04x  [0x%05x] t=%lu: ",
+				       addr, wa[pru_num][i].address, t_cyc);
+				cmd_d_rows(pru_data_base[pru_num]*4,
+					   wa[pru_num][i].address,
+					   wa[pru_num][i].len);
+
+				memcpy(wa[pru_num][i].old_value,
+				       pru_u8 + pru_data_base[pru_num]*4
+					      + wa[pru_num][i].address,
+				       wa[pru_num][i].len);
+			} else if ((wa[pru_num][i].state == WA_HALT_ON_VALUE) &&
+				   (memcmp(wa[pru_num][i].value,
+					   pru_u8 + pru_data_base[pru_num]*4
+						  + wa[pru_num][i].address,
+					   wa[pru_num][i].len) == 0)) {
+
+				printf("@0x%04x  [0x%05x] t=%lu: ",
+				       addr, wa[pru_num][i].address, t_cyc);
+				cmd_d_rows(pru_data_base[pru_num]*4,
+					   wa[pru_num][i].address,
+					   wa[pru_num][i].len);
+
 				done = 1;
 			}
 		}
@@ -233,7 +374,7 @@ void cmd_runss()
 
 		// increase time
 		t_cyc++;
-	} while ((!done) && (r == 0));
+	} while ((!done) && (r == 0) && (count != 0));
 
 	// if there is a character in the stdin queue, read the character
 	if (r > 0) getchar();
@@ -242,16 +383,25 @@ void cmd_runss()
 
 	// print the registers
 	cmd_printregs();
+
+	// disable single step mode and disable processor
+	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+	ctrl_reg &= ~PRU_REG_PROC_EN;
+	ctrl_reg &= ~PRU_REG_SINGLE_STEP;
+	pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
 }
 
-void cmd_single_step()
+void cmd_single_step(unsigned int N)
 {
 	unsigned int		ctrl_reg;
+	unsigned int i;
 
-	// set single step mode and enable processor
-	ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
-	ctrl_reg |= PRU_REG_PROC_EN | PRU_REG_SINGLE_STEP;
-	pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
+	for (i = 0; i < N; ++i ) {
+		// set single step mode and enable processor
+		ctrl_reg = pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG];
+		ctrl_reg |= PRU_REG_PROC_EN | PRU_REG_SINGLE_STEP;
+		pru[pru_ctrl_base[pru_num] + PRU_CTRL_REG] = ctrl_reg;
+	}
 
 	// print the registers
 	cmd_printregs();
@@ -282,9 +432,17 @@ void cmd_print_watch()
 	printf("##  Address  Value\n");
 	for (i=0; i<MAX_WATCH; i++) {
 		if (wa[pru_num][i].state == WA_PRINT_ON_ANY) {
-			printf("%02u  0x%04x     Print on any\n", i, wa[pru_num][i].address);
+			printf("%02u  0x%05x     Print on any change from:\n",
+			       i, wa[pru_num][i].address);
+			cmd_dx_rows("\t\t", wa[pru_num][i].old_value, 0, 0x0,
+				    wa[pru_num][i].len);
+
 		} else if (wa[pru_num][i].state == WA_HALT_ON_VALUE) {
-			printf("%02u  0x%04x     Halt = 0x%04x\n", i, wa[pru_num][i].address, wa[pru_num][i].value);
+			printf("%02u  0x%05x     Halt = \n",
+			       i, wa[pru_num][i].address);
+			cmd_dx_rows("\t\t", wa[pru_num][i].value, 0, 0x0,
+				    wa[pru_num][i].len);
+
 		} else {
 			printf("%02u  UNUSED\n", i);
 		}
@@ -298,20 +456,31 @@ void cmd_clear_watch (unsigned int wanum)
 	wa[pru_num][wanum].state = WA_UNUSED;
 }
 
+inline unsigned int min(unsigned int a, unsigned int b) {
+	return a < b ? a : b;
+}
+
 // set a watch for any change in value and no halt
-void cmd_set_watch_any (unsigned int wanum, unsigned int addr)
+void cmd_set_watch_any (unsigned int wanum, unsigned int addr, unsigned int len)
 {
-	wa[pru_num][wanum].state = WA_PRINT_ON_ANY;
-	wa[pru_num][wanum].address = addr;
-	wa[pru_num][wanum].old_value = pru[pru_data_base[pru_num] + addr];
+	unsigned char * pru_u8 = (unsigned char*)pru;
+	wa[pru_num][wanum].state	= WA_PRINT_ON_ANY;
+	wa[pru_num][wanum].address	= addr;
+	wa[pru_num][wanum].len		= len;
+	memcpy(wa[pru_num][wanum].old_value,
+	       pru_u8 + pru_data_base[pru_num]*4 + addr,
+	       min(len, MAX_WATCH_LEN));
 }
 
 // set a watch for a specific value and halt
-void cmd_set_watch (unsigned int wanum, unsigned int addr, unsigned int value)
+void cmd_set_watch (unsigned int wanum, unsigned int addr,
+		    unsigned int len, unsigned char * value)
 {
-	wa[pru_num][wanum].state = WA_HALT_ON_VALUE;
-	wa[pru_num][wanum].address = addr;
-	wa[pru_num][wanum].value = value;
+	wa[pru_num][wanum].state	= WA_HALT_ON_VALUE;
+	wa[pru_num][wanum].address	= addr;
+	wa[pru_num][wanum].len		= len;
+	memcpy(wa[pru_num][wanum].value, value,
+	       min(len, MAX_WATCH_LEN));
 }
 
 

@@ -14,11 +14,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include <termios.h>
-#include <sys/ioctl.h>
+#include <regex.h>
+#include <string.h>
+#include <ctype.h>
 
 #include "prudbg.h"
 #include "uio.h"
+#include "privs.h"
 
 
 // global variable definitions
@@ -28,6 +30,7 @@ unsigned int			pru_ctrl_base[MAX_NUM_OF_PRUS];
 unsigned int			pru_data_base[MAX_NUM_OF_PRUS];
 unsigned int			pru_num = 0;
 unsigned int			last_offset, last_addr, last_len, last_cmd;
+unsigned int			last_n_single_step;
 struct breakpoints		bp[MAX_NUM_OF_PRUS][MAX_BREAKPOINTS];
 struct watchvariable		wa[MAX_NUM_OF_PRUS][MAX_WATCH];
 
@@ -128,6 +131,37 @@ int strcmpci(char *str1, char *str2, int m) {
 	return r;
 }
 
+/* This function adds 0b... format recognition to strtoll */
+static long parse_long(const char * str) {
+	if (strlen(str) > 2 && strncmp(str, "0b", 2) == 0) {
+		return strtoll(str+2, NULL, 2);
+	}
+	return strtoll(str, NULL, 0);
+}
+
+static size_t parse_addr(const char * str, const regex_t * reg_regex) {
+	size_t addr;
+
+	if (!strcasecmp(str, "cycle")) {
+		addr = pru_ctrl_base[pru_num] + PRU_CYCLE_REG
+			- pru_data_base[pru_num];
+		addr *= 4;
+	} else if (!regexec(reg_regex, str, 0, NULL, 0)) {
+		while (strlen(str) != 0 && isspace(str[0]))
+			++str;
+
+		/* Need to make register address offset by data base */
+		addr = strtoll(str+1, NULL, 10)
+		     + (PRU_INTGPR_REG + pru_ctrl_base[pru_num]
+			- pru_data_base[pru_num]);
+		/* convert this to a byte address */
+		addr *= 4;
+	} else {
+		addr = parse_long(str);
+	}
+	return addr;
+}
+
 // main entry point for program
 int main(int argc, char *argv[])
 {
@@ -135,16 +169,17 @@ int main(int argc, char *argv[])
 	char			prompt_str[20];
 	char			cmd[MAX_CMD_LEN], cmdargs[MAX_CMDARGS_LEN];
 	unsigned int		argptrs[MAX_ARGS], numargs;
-	struct termios		oldT, newT;
 	unsigned int		i;
-	unsigned int		addr, len, bpnum, offset, wanum, value;
+	unsigned int		addr, len, bpnum, offset, wanum;
 	int			opt;
 	unsigned long		opt_pruss_addr;
 	int			pru_access_mode, pi, pitemp;
 	char			uio_dev_file[50];
+	regex_t reg_regex;
+	regcomp(&reg_regex, "[:space:]*r[0-9]\\+\\>", REG_ICASE);
 
 	// say hello
-	printf ("PRU Debugger v0.25\n");
+	printf ("PRU Debugger v" VERSION "\n");
 	printf ("(C) Copyright 2011, 2013 by Arctica Technologies.  All rights reserved.\n");
 	printf ("Written by Steven Anderson\n");
 	printf ("\n");
@@ -156,7 +191,7 @@ int main(int argc, char *argv[])
 	while ((opt = getopt(argc, argv, "?a:p:um")) != -1) {
 		switch (opt) {
 			case 'a':
-				opt_pruss_addr = strtol(optarg, NULL, 0);
+				opt_pruss_addr = parse_long(optarg);
 				break;
 				
 			case 'u':
@@ -208,7 +243,7 @@ int main(int argc, char *argv[])
 	// determine how to obtain the PRU base memory pointer (/dev/mem or a UIO PRUSS driver file - /dev/uio*)
 	if (pru_access_mode == ACCESS_GUESS || pru_access_mode == ACCESS_UIO) {
 		// get the UIO info (a UIO device file for the PRUSS)
-		uio_getprussfile(uio_dev_file);
+		uio_getprussfile(uio_dev_file, sizeof(uio_dev_file));
 		if (uio_dev_file[0] != 0) {
 			// there is a valid UIO/PRUSS file so open it and use the pointer
 			fd = open (uio_dev_file, O_RDWR | O_SYNC);
@@ -257,6 +292,7 @@ int main(int argc, char *argv[])
 		close(fd);
 		printf ("Using /dev/mem device.\n");
 	}
+	drop_root_privileges();
 
 	// get memory pointer for PRU from /dev/mem
 
@@ -272,7 +308,7 @@ int main(int argc, char *argv[])
 
 	// print some useful info
 	printf("Processor type		%s\n", pdb[pi].processor);
-	printf("PRUSS memory address	0x%08x\n", opt_pruss_addr);
+	printf("PRUSS memory address	0x%08lx\n", opt_pruss_addr);
 	printf("PRUSS memory length	0x%08x\n\n", pdb[pi].pruss_len);
 	printf("         offsets below are in 32-bit word addresses (not ARM byte addresses)\n");
 	printf("         PRU            Instruction    Data         Ctrl\n");
@@ -281,19 +317,13 @@ int main(int argc, char *argv[])
 	}
 	printf("\n");
 
-	// setup the terminal for more flexible IO
-	ioctl(0,TCGETS,&oldT);
-	newT=oldT;
-	newT.c_lflag &= ~ECHO;
-	newT.c_lflag &= ~ICANON;
-	ioctl(0,TCSETS,&newT);
-
 
 	// Command prompt handler
 	do {
 		// get command from user
 		sprintf(prompt_str, "PRU%u> ", pru_num);
-		cmd_input(prompt_str, cmd, cmdargs, argptrs, &numargs);
+		if (cmd_input(prompt_str, cmd, cmdargs, argptrs, &numargs))
+			break;
 
 		// do something with command info
 		if (!strcmp(cmd, "?") || !strcmp(cmd, "HELP")) {		// HELP - help command
@@ -311,15 +341,15 @@ int main(int argc, char *argv[])
 			if (numargs == 0) {
 				cmd_print_breakpoints();
 			} else if (numargs == 1) {
-				bpnum = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				bpnum = parse_long(&cmdargs[argptrs[0]]);
 				if (bpnum < MAX_BREAKPOINTS) {
 					cmd_clear_breakpoint (bpnum);
 				} else {
 					printf("ERROR: breakpoint number must be equal to or between 0 and %u\n", MAX_BREAKPOINTS-1);
 				}
 			} else if (numargs == 2) {
-				bpnum = strtol(&cmdargs[argptrs[0]], NULL, 0);
-				addr = strtol(&cmdargs[argptrs[1]], NULL, 0);
+				bpnum = parse_long(&cmdargs[argptrs[0]]);
+				addr = parse_long(&cmdargs[argptrs[1]]);
 				if (bpnum < MAX_BREAKPOINTS) {
 					cmd_set_breakpoint (bpnum, addr);
 				} else {
@@ -330,30 +360,52 @@ int main(int argc, char *argv[])
 			}
 		}
 
+		else if (!strcmp(cmd, "CYCLE")) {				// CYCLE - Print/clear/[en|dis]able CYCLE counter
+			last_cmd = LAST_CMD_NONE;
+			if (numargs == 0) {
+				cmd_print_ctrlreg_uint("CYCLE", PRU_CYCLE_REG);
+			} else if (numargs == 1) {
+				if (!strncmp(&cmdargs[argptrs[0]], "on", 2)) {
+					cmd_set_ctrlreg_bits(PRU_CTRL_REG, PRU_REG_COUNT_EN);
+				} else if (!strncmp(&cmdargs[argptrs[0]], "off", 3)) {
+					cmd_clr_ctrlreg_bits(PRU_CTRL_REG, PRU_REG_COUNT_EN);
+				} else if (!strncmp(&cmdargs[argptrs[0]], "clear", 5)) {
+					/* all writes clear the register */
+					cmd_set_ctrlreg(PRU_CYCLE_REG, 0);
+				} else {
+					printf("ERROR: invalid argument\n");
+				}
+			} else {
+				printf("ERROR: too many arguments\n");
+			}
+		}
+
 		else if ((!strcmp(cmd, "D")) || (!strcmp(cmd, "DD")) || (!strcmp(cmd, "DI"))) {	// D - Dump command
 			if (numargs > 2) {
 				printf("ERROR: too many arguments\n");
 			} else {
 				if (numargs == 2) {
-					addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
-					len = strtol(&cmdargs[argptrs[1]], NULL, 0);
+					addr = parse_long(&cmdargs[argptrs[0]]);
+					len = parse_long(&cmdargs[argptrs[1]]);
 				} else if (numargs == 0) {
 					addr = 0;
-					len = 16;
+					len = 16*4;
 				} else {
-					addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
-					len = 16;
+					addr = parse_long(&cmdargs[argptrs[0]]);
+					len = 16*4;
 				}
-				if ((addr < 0) || (addr > MAX_PRU_MEM - 1) || (len < 0) || (addr+len > MAX_PRU_MEM)) {
+				if ((addr < 0) || (addr     > ((1+MAX_PRU_MEM)*4 - 1)) ||
+				    (len < 0)  || (addr+len > ((1+MAX_PRU_MEM)*4))) {
 					printf("ERROR: arguments out of range.\n");
 				} else if (numargs > 2) {
 					printf("ERROR: Incorrect format.  Please use help command to get command details.\n");
 				} else {
+					/* The memory is examined byte per byte, so multiply addresses by 4 */
 					if (!strcmp(cmd, "DD")) {
-						offset = pru_data_base[pru_num];
+						offset = pru_data_base[pru_num] * 4;
 						last_cmd = LAST_CMD_DD;
 					} else if (!strcmp(cmd, "DI")) {
-						offset = pru_inst_base[pru_num];
+						offset = pru_inst_base[pru_num] * 4;
 						last_cmd = LAST_CMD_DI;
 					} else {
 						offset = 0;
@@ -362,7 +414,6 @@ int main(int argc, char *argv[])
 					last_offset = offset;
 					last_addr = addr + len;
 					last_len = len;
-					printf ("Absolute addr = 0x%04x, offset = 0x%04x, Len = %u\n", addr + offset, addr, len);
 					cmd_d(offset, addr, len);
 				}
 			}
@@ -373,16 +424,20 @@ int main(int argc, char *argv[])
 				printf("ERROR: too many arguments\n");
 			} else {
 				if (numargs == 2) {
-					addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
-					len = strtol(&cmdargs[argptrs[1]], NULL, 0);
+					addr = parse_long(&cmdargs[argptrs[0]]);
+					len = parse_long(&cmdargs[argptrs[1]]);
 				} else if (numargs == 0) {
-					addr = 0;
+					// default address will be the current
+					// instruction minus 2 for context
+					addr = pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG] & 0xFFFF;
+					addr -= addr >= 2 ? 2 : (addr >= 1 ? 1 : 0);
 					len = 16;
 				} else {
-					addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
+					addr = parse_long(&cmdargs[argptrs[0]]);
 					len = 16;
 				}
-				if ((addr < 0) || (addr > MAX_PRU_MEM - 1) || (len < 0) || (addr+len > MAX_PRU_MEM)) {
+				if ((addr < 0) || (addr     > MAX_PRU_MEM - 1) ||
+				    (len < 0)  || (addr+len > MAX_PRU_MEM)) {
 					printf("ERROR: arguments out of range.\n");
 				} else if (numargs > 2) {
 					printf("ERROR: Incorrect format.  Please use help command to get command details.\n");
@@ -408,7 +463,7 @@ int main(int argc, char *argv[])
 				cmd_run();
 			} else {
 				// set instruction pointer
-				addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				addr = parse_long(&cmdargs[argptrs[0]]);
 
 				// start processor
 //				cmd_run_at(addr);
@@ -418,11 +473,15 @@ int main(int argc, char *argv[])
 
 		else if (!strcmp(cmd, "GSS")) {					// GSS - Start program using single stepping to provde BP/Watch
 			last_cmd = LAST_CMD_NONE;
-			if (numargs > 0) {
+			if (numargs > 1) {
 				printf("ERROR: too many arguments\n");
 			} else {
+				long nss = 0;
+				if (numargs == 1) {
+					nss = parse_long(&cmdargs[argptrs[0]]);
+				}
 				// halt the processor
-				cmd_runss();
+				cmd_runss(nss);
 			}
 		}
 
@@ -441,7 +500,7 @@ int main(int argc, char *argv[])
 			if (numargs != 2) {
 				printf("ERROR: incorrect number of arguments\n");
 			} else {
-				addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				addr = parse_long(&cmdargs[argptrs[0]]);
 				cmd_loadprog(addr, &cmdargs[argptrs[1]]);
 			}
 		}
@@ -451,7 +510,7 @@ int main(int argc, char *argv[])
 			if (numargs != 1) {
 				printf("ERROR: incorrect number of arguments\n");
 			} else {
-				pru_num = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				pru_num = parse_long(&cmdargs[argptrs[0]]);
 				printf("Active PRU is PRU%u.\n\n", pru_num);
 			}
 		}
@@ -463,9 +522,27 @@ int main(int argc, char *argv[])
 			} else {
 				cmd_printregs();
 			}
-		}		
+		}
 
-		else if (!strcmp(cmd, "RESET")) {					// RESET - Reset PRU
+		else if (!regexec(&reg_regex, cmd, 0, NULL, 0)) {		// R[0..31] - Read/Write single PRU registers
+			last_cmd = LAST_CMD_NONE;
+			i = 0;
+			/* skip leading white space */
+			while (strlen(cmd+i) != 0 && isspace(cmd[i]))
+				++i;
+
+			i = parse_long(cmd+i + 1);
+			if (numargs == 0) {
+				cmd_printreg(i);
+			} else if (numargs == 1) {
+				unsigned int value = parse_long(&cmdargs[argptrs[0]]);
+				cmd_setreg(i, value);
+			} else {
+				printf("ERROR: too many arguments\n");
+			}
+		}
+
+		else if (!strcmp(cmd, "RESET")) {				// RESET - Reset PRU
 			last_cmd = LAST_CMD_NONE;
 			if (numargs > 0) {
 				printf("ERROR: too many arguments\n");
@@ -477,12 +554,25 @@ int main(int argc, char *argv[])
 		}
 
 		else if (!strcmp(cmd, "SS")) {					// SS - Single step
-			last_cmd = LAST_CMD_SS;
-			if (numargs > 0) {
+			unsigned int N = 1;
+
+			if (numargs == 1) {
+				N = parse_long(&cmdargs[argptrs[0]]);
+			} else if (numargs > 1) {
+				N = 0;
 				printf("ERROR: too many arguments\n");
-			} else {
+				printf("single-step usage:\n");
+				printf("SS [n_steps]\n");
+			}
+
+			if (N >= 1) {
 				// reset the processor
-				cmd_single_step();
+				if (N > 1) {
+					printf("single-stepping %u times\n", N);
+				}
+				last_cmd = LAST_CMD_SS;
+				last_n_single_step = N;
+				cmd_single_step(N);
 			}
 		}
 
@@ -491,52 +581,74 @@ int main(int argc, char *argv[])
 			if (numargs == 0) {
 				cmd_print_watch();
 			} else if (numargs == 1) {
-				wanum = strtol(&cmdargs[argptrs[0]], NULL, 0);
+				wanum = parse_long(&cmdargs[argptrs[0]]);
 				if (wanum < MAX_WATCH) {
 					cmd_clear_watch (wanum);
 				} else {
 					printf("ERROR: breakpoint number must be equal to or between 0 and %u\n", MAX_WATCH-1);
 				}
-			} else if (numargs == 2) {
-				wanum = strtol(&cmdargs[argptrs[0]], NULL, 0);
-				addr = strtol(&cmdargs[argptrs[1]], NULL, 0);
+			} else if (numargs >= 2 && numargs <= 3) {
+				unsigned int len = 4;
+
+				wanum = parse_long(&cmdargs[argptrs[0]]);
+				addr = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
+				if (numargs == 3)
+					len = parse_long(&cmdargs[argptrs[2]]);
 				if (wanum < MAX_WATCH) {
-					cmd_set_watch_any (wanum, addr);
+					cmd_set_watch_any (wanum, addr, len);
 				} else {
 					printf("ERROR: breakpoint number must be equal to or between 0 and %u\n", MAX_WATCH-1);
 				}
-			} else if (numargs == 3) {
-				wanum = strtol(&cmdargs[argptrs[0]], NULL, 0);
-				addr = strtol(&cmdargs[argptrs[1]], NULL, 0);
-				value = strtol(&cmdargs[argptrs[2]], NULL, 0);
+			} else if (numargs-4 > MAX_WATCH_LEN) {
+				printf("ERROR: too many watch values\n");
+			} else if (numargs >= 5) {
+				unsigned char vlist[MAX_WATCH_LEN];
+
+				wanum = parse_long(&cmdargs[argptrs[0]]);
+				addr  = parse_addr(&cmdargs[argptrs[1]], &reg_regex);
+
+				/* gather all the values */
+				for(i = 3; i < numargs; ++i) {
+					vlist[i-3] = 0xff & parse_long(&cmdargs[argptrs[i]]);
+				}
+
 				if (wanum < MAX_WATCH) {
-					cmd_set_watch (wanum, addr, value);
+					cmd_set_watch (wanum, addr, numargs - 4, vlist);
 				} else {
 					printf("ERROR: breakpoint number must be equal to or between 0 and %u\n", MAX_WATCH-1);
 				}
 			} else {
-				printf("ERROR: invalid breakpoint command\n");
+				printf("ERROR: invalid watch command\n");
 			}
 		}
 
-		else if ((!strcmp(cmd, "WR")) || (!strcmp(cmd, "WRD")) || (!strcmp(cmd, "WRI"))) {  // WR - Write Raw
+		else if ((!strcmp(cmd, "WR"))  ||
+			 (!strcmp(cmd, "WRD")) ||
+			 (!strcmp(cmd, "WRI"))) {  // WR - Write Raw
 			last_cmd = LAST_CMD_NONE;
-			addr = strtol(&cmdargs[argptrs[0]], NULL, 0);
+			addr = parse_long(&cmdargs[argptrs[0]]);
 			if (numargs < 2) {
 				printf("ERROR: too few arguments\n");
 			} else {
-				if ((addr < 0) || (addr > MAX_PRU_MEM - 1)) {
+				if ((addr < 0) || (addr > ((1+MAX_PRU_MEM)*4 - 1)) ||
+				    (addr+numargs-1 > ((1+MAX_PRU_MEM)*4))) {
 					printf("ERROR: arguments out of range.\n");
 				} else {
+					unsigned char *pru_u8 = (unsigned char*)pru;
+
+					/* The memory is examined byte per byte,
+					 * so multiply addresses by 4 */
 					if (!strcmp(cmd, "WRD")) {
-						offset = pru_data_base[pru_num];
+						offset = pru_data_base[pru_num]*4;
 					} else if (!strcmp(cmd, "WRI")) {
-						offset = pru_inst_base[pru_num];
+						offset = pru_inst_base[pru_num]*4;
 					} else {
 						offset = 0;
 					}
 					printf("Write to absolute address 0x%04x\n", offset+addr);
-					for (i=1; i<numargs; i++) pru[offset+addr+i-1] = (unsigned int) (strtoll(&cmdargs[argptrs[i]], NULL, 0) & 0xFFFFFFFF);
+					for (i=1; i<numargs; ++i)
+						pru_u8[offset+addr+i-1] =
+							(unsigned char)(parse_long(&cmdargs[argptrs[i]]) & 0xFF);
 				}
 			}
 		}
@@ -549,13 +661,12 @@ int main(int argc, char *argv[])
 				case LAST_CMD_D:
 				case LAST_CMD_DD:
 				case LAST_CMD_DI:
-					printf ("Absolute addr = 0x%04x, offset = 0x%04x, Len = %u\n", last_addr + last_offset, last_addr, last_len);
 					cmd_d(last_offset, last_addr, last_len);
 					last_addr += last_len;
 					break;
 
 				case LAST_CMD_SS:
-					cmd_single_step();
+					cmd_single_step(last_n_single_step);
 					break;
 
 				default:
@@ -570,9 +681,7 @@ int main(int argc, char *argv[])
 	} while (strcmp(cmd, "Q"));
 
 	printf("\nGoodbye.\n\n");
-
-	// restore terminal IO settings
-	ioctl(0,TCSETS,&oldT);
+	regfree(&reg_regex);
 
 	return 0;
 }
