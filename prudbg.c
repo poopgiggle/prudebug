@@ -427,14 +427,17 @@ int main(int argc, char *argv[])
 					addr = parse_long(&cmdargs[argptrs[0]]);
 					len = parse_long(&cmdargs[argptrs[1]]);
 				} else if (numargs == 0) {
-					addr = 0;
+					// default address will be the current
+					// instruction minus 2 for context
+					addr = pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG] & 0xFFFF;
+					addr -= addr >= 2 ? 2 : (addr >= 1 ? 1 : 0);
 					len = 16;
 				} else {
 					addr = parse_long(&cmdargs[argptrs[0]]);
 					len = 16;
 				}
 				if ((addr < 0) || (addr     > MAX_PRU_MEM - 1) ||
-            (len < 0)  || (addr+len > MAX_PRU_MEM)) {
+				    (len < 0)  || (addr+len > MAX_PRU_MEM)) {
 					printf("ERROR: arguments out of range.\n");
 				} else if (numargs > 2) {
 					printf("ERROR: Incorrect format.  Please use help command to get command details.\n");
