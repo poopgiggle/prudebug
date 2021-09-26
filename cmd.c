@@ -87,18 +87,32 @@ void cmd_d (int offset, int addr, int len)
 // disassemble instruction memory
 void cmd_dis (int offset, int addr, int len)
 {
-	int			i;
+	int			i, k;
 	char			inst_str[50];
 	unsigned int		status_reg;
-	char			*pc[] = {"  ", ">>"};
+	const char		*br_str[] = {" ", "*"};
+	int			on_br = 0;
+	const char		*pc[] = {"  ", ">>"};
 	int			pc_on = 0;
 
 	status_reg = (pru[pru_ctrl_base[pru_num] + PRU_STATUS_REG]) & 0xFFFF;
 
 	for (i=0; i<len; i++) {
-		if (status_reg == (addr + i)) pc_on = 1; else pc_on = 0;
+		pc_on = (status_reg == (addr + i)) ? 1 : 0;
+
+		on_br = 0;
+		for (k=0; k<MAX_BREAKPOINTS; ++k) {
+			if ((bp[pru_num][k].state == BP_ACTIVE) &&
+			    (bp[pru_num][k].address == (addr + i))) {
+				on_br = 1;
+				break;
+			}
+		}
+
 		disassemble(inst_str, pru[offset+addr+i]);
-		printf ("[0x%04x] 0x%08x %s %s\n", addr+i, pru[offset+addr+i], pc[pc_on], inst_str);
+		printf("[0x%04x] 0x%08x %s %s %s\n",
+		       addr+i, pru[offset+addr+i], br_str[on_br], pc[pc_on],
+		       inst_str);
 	}
 	printf("\n");
 }
